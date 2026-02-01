@@ -82,7 +82,7 @@
       return items;
     }
 
-    fetch("./data/novo.json")
+    fetch("./data/novo.json?v=" + Date.now())
       .then(r => r.json())
       .then(d => {
         document.getElementById("asof").textContent = `Data pr. ${d.asOf} (ticker: ${d.ticker})`;
@@ -133,8 +133,12 @@ if (Array.isArray(d.history) && d.history.length > 1) {
   }
 }
 })
-      .catch(() => {
-        document.getElementById("asof").textContent = "Kunne ikke hente ./data/novo.json (tjek filnavn/sted).";
+      .catch((err) => {
+  document.getElementById("asof").textContent =
+    "Kunne ikke hente/parse ./data/novo.json: " + (err?.message || err);
+  console.log("FETCH ERROR:", err);
+});
+
       });
   </script>
 </body>
