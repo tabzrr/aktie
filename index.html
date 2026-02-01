@@ -5,68 +5,148 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Markedsoverblik (MVP)</title>
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 24px; max-width: 900px; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-    button { padding: 10px 12px; border: 1px solid #ccc; border-radius: 10px; background: #fff; cursor: pointer; }
-    button.primary { border-color: #111; font-weight: 600; }
-    .card { border: 1px solid #e5e5e5; border-radius: 14px; padding: 16px; margin: 12px 0; }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; }
-    input { padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+    :root { --border:#e7e7e7; --text:#111; --muted:#666; --bg:#fff; }
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
+    .nav {
+      position: sticky; top: 0; background: rgba(255,255,255,.9);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--border);
+      z-index: 10;
+    }
+    .nav-inner { max-width: 980px; margin: 0 auto; padding: 10px 18px; display:flex; gap:12px; align-items:center; }
+    .brand { font-weight: 800; letter-spacing: .2px; }
+    .nav a { text-decoration: none; color: var(--text); padding: 8px 10px; border-radius: 10px; }
+    .nav a:hover { background: #f4f4f4; }
+    .nav .spacer { flex: 1; }
+    .pill { border:1px solid var(--border); border-radius: 999px; padding: 6px 10px; font-size: 13px; color: var(--muted); }
+
+    h1 { margin: 14px 0 6px; }
+    .muted { color: var(--muted); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+    button {
+      padding: 10px 12px; border: 1px solid #ccc; border-radius: 12px; background: #fff; cursor: pointer;
+    }
+    button.primary { border-color: #111; font-weight: 700; }
+    .card { border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin: 14px 0; background: #fff; }
+    .badge { display: inline-block; padding: 5px 10px; border-radius: 999px; border: 1px solid #ddd; margin-right: 8px; font-size: 13px; }
+    input { padding: 10px; border: 1px solid #ccc; border-radius: 12px; }
     ul { padding-left: 18px; }
-    .muted { color: #666; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--border); font-size: 14px; }
+    th { color: var(--muted); font-weight: 600; }
+    .small { font-size: 13px; }
+    .footer { margin: 18px 0 30px; color: var(--muted); font-size: 12.5px; }
   </style>
 </head>
 <body>
-  <h1>Markedsoverblik (MVP)</h1>
-  <p class="muted">Demo uden real-time data. Formål: klikbar prototype.</p>
 
-  <div class="card">
-    <h2>Vælg market state</h2>
-    <div class="row">
-      <button id="btnRiskOn">Risk-on</button>
-      <button id="btnRiskOff">Risk-off</button>
-      <button id="btnTrend">Trend</button>
-      <button id="btnBalance">Balance</button>
-      <button id="btnReset" class="primary">Reset</button>
-    </div>
-
-    <div>
-      <div class="badge" id="stateBadge">State: (ingen)</div>
-      <div class="badge" id="confBadge">Confidence: (ingen)</div>
-    </div>
-
-    <div class="card" style="margin-top:12px;">
-      <h3>Forklaring</h3>
-      <ul id="explainList">
-        <li class="muted">Vælg en state for at se forklaring.</li>
-      </ul>
-    </div>
-
-    <div class="card" style="margin-top:12px;">
-      <h3>“Hvad gør man typisk?” (uddannelse)</h3>
-      <p id="actionText" class="muted">Vælg en state.</p>
-      <p class="muted" style="font-size: 13px;">
-        Disclaimer: Dette er ikke investeringsrådgivning. Kun information/uddannelse.
-      </p>
+  <div class="nav">
+    <div class="nav-inner">
+      <div class="brand">Aktie-MVP</div>
+      <a href="./index.html">Forside</a>
+      <a href="./novo.html">Novo</a>
+      <a href="./laering.html">Læring</a>
+      <a href="./om.html">Om</a>
+      <div class="spacer"></div>
+      <div class="pill" id="lastUpdatedPill">Sidst opdateret: —</div>
     </div>
   </div>
 
-  <div class="card">
-    <h2>Watchlist (demo)</h2>
-    <div class="row">
-      <input id="tickerInput" placeholder="Skriv ticker, fx NOVO-B" />
-      <button id="addTicker" class="primary">Tilføj</button>
-      <button id="clearTickers">Ryd</button>
+  <div class="wrap">
+    <h1>Markedsoverblik (MVP)</h1>
+    <p class="muted">Demo uden real-time data. Formål: klikbar prototype.</p>
+
+    <div class="card">
+      <h2>Vælg market state</h2>
+      <div class="row">
+        <button id="btnRiskOn">Risk-on</button>
+        <button id="btnRiskOff">Risk-off</button>
+        <button id="btnTrend">Trend</button>
+        <button id="btnBalance">Balance</button>
+        <button id="btnReset" class="primary">Reset</button>
+      </div>
+
+      <div class="row">
+        <div class="badge" id="stateBadge">State: (ingen)</div>
+        <div class="badge" id="confBadge">Confidence: (ingen)</div>
+      </div>
+
+      <div class="card">
+        <h3>Forklaring</h3>
+        <ul id="explainList">
+          <li class="muted">Vælg en state for at se forklaring.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>“Hvad gør man typisk?” (uddannelse)</h3>
+        <p id="actionText" class="muted">Vælg en state.</p>
+        <p class="muted small">
+          Disclaimer: Dette er ikke investeringsrådgivning. Kun information/uddannelse.
+        </p>
+      </div>
     </div>
-    <ul id="tickerList"></ul>
+
+    <div class="card">
+      <h2>Signal-log (historik)</h2>
+      <p class="muted small">
+        Gemmes i din browser (localStorage). God til at vise “hvornår skiftede signalet?”
+      </p>
+
+      <div class="row">
+        <button id="exportLog" class="primary">Eksportér (kopiér)</button>
+        <button id="clearLog">Ryd log</button>
+      </div>
+
+      <div style="overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Tidspunkt</th>
+              <th>State</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody id="logBody">
+            <tr><td colspan="3" class="muted">Ingen signaler endnu.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Watchlist (demo)</h2>
+      <div class="row">
+        <input id="tickerInput" placeholder="Skriv ticker, fx NOVO-B" />
+        <button id="addTicker" class="primary">Tilføj</button>
+        <button id="clearTickers">Ryd</button>
+      </div>
+      <ul id="tickerList"></ul>
+    </div>
+
+    <div class="footer">
+      Tip: Når du senere får “rigtige data”, kan du auto-sætte state og bare lade loggen tracke ændringer.
+    </div>
   </div>
 
   <script>
+    // ---------- Helpers ----------
+    function pad(n){ return String(n).padStart(2,"0"); }
+    function fmt(ts){
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    // ---------- UI refs ----------
+    const lastUpdatedPill = document.getElementById("lastUpdatedPill");
     const stateBadge = document.getElementById("stateBadge");
     const confBadge  = document.getElementById("confBadge");
     const explainList = document.getElementById("explainList");
     const actionText = document.getElementById("actionText");
+    const logBody = document.getElementById("logBody");
 
+    // ---------- Presets ----------
     const preset = {
       "Risk-on": {
         confidence: "Middel",
@@ -90,8 +170,60 @@
       }
     };
 
-    function setState(name) {
+    // ---------- Log ----------
+    function loadLog(){
+      return JSON.parse(localStorage.getItem("signalLog") || "[]");
+    }
+    function saveLog(arr){
+      localStorage.setItem("signalLog", JSON.stringify(arr));
+      renderLog();
+      updateLastUpdated();
+    }
+    function addLogEntry(stateName){
+      const entry = {
+        ts: Date.now(),
+        state: stateName,
+        confidence: preset[stateName].confidence
+      };
+      const arr = loadLog();
+      arr.unshift(entry); // newest first
+      // keep last 200 entries
+      saveLog(arr.slice(0, 200));
+    }
+    function renderLog(){
+      const arr = loadLog();
+      if (arr.length === 0){
+        logBody.innerHTML = `<tr><td colspan="3" class="muted">Ingen signaler endnu.</td></tr>`;
+        return;
+      }
+      logBody.innerHTML = arr.map(e => `
+        <tr>
+          <td>${fmt(e.ts)}</td>
+          <td>${e.state}</td>
+          <td>${e.confidence}</td>
+        </tr>
+      `).join("");
+    }
+    function updateLastUpdated(){
+      const arr = loadLog();
+      const ts = arr[0]?.ts || null;
+      lastUpdatedPill.textContent = ts ? `Sidst opdateret: ${fmt(ts)}` : "Sidst opdateret: —";
+    }
+
+    // ---------- State ----------
+    function highlightButton(name) {
+      ["btnRiskOn","btnRiskOff","btnTrend","btnBalance"].forEach(id => {
+        document.getElementById(id).classList.remove("primary");
+      });
+      if (name === "Risk-on") document.getElementById("btnRiskOn").classList.add("primary");
+      if (name === "Risk-off") document.getElementById("btnRiskOff").classList.add("primary");
+      if (name === "Trend") document.getElementById("btnTrend").classList.add("primary");
+      if (name === "Balance") document.getElementById("btnBalance").classList.add("primary");
+    }
+
+    function setState(name, {log=true} = {}) {
       localStorage.setItem("marketState", name);
+
       stateBadge.textContent = "State: " + name;
       confBadge.textContent = "Confidence: " + preset[name].confidence;
 
@@ -104,6 +236,8 @@
 
       actionText.textContent = preset[name].action;
       highlightButton(name);
+
+      if (log) addLogEntry(name);
     }
 
     function resetState() {
@@ -115,23 +249,34 @@
       highlightButton(null);
     }
 
-    function highlightButton(name) {
-      ["btnRiskOn","btnRiskOff","btnTrend","btnBalance"].forEach(id => {
-        document.getElementById(id).classList.remove("primary");
-      });
-      if (name === "Risk-on") document.getElementById("btnRiskOn").classList.add("primary");
-      if (name === "Risk-off") document.getElementById("btnRiskOff").classList.add("primary");
-      if (name === "Trend") document.getElementById("btnTrend").classList.add("primary");
-      if (name === "Balance") document.getElementById("btnBalance").classList.add("primary");
-    }
-
     document.getElementById("btnRiskOn").onclick = () => setState("Risk-on");
     document.getElementById("btnRiskOff").onclick = () => setState("Risk-off");
     document.getElementById("btnTrend").onclick = () => setState("Trend");
     document.getElementById("btnBalance").onclick = () => setState("Balance");
     document.getElementById("btnReset").onclick = resetState;
 
-    // Watchlist
+    // Export / clear log
+    document.getElementById("exportLog").onclick = async () => {
+      const arr = loadLog();
+      const text = JSON.stringify(arr, null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+        alert("Log kopieret til udklipsholder ✅");
+      } catch {
+        // fallback: prompt
+        prompt("Kopiér log herfra:", text);
+      }
+    };
+
+    document.getElementById("clearLog").onclick = () => {
+      if (confirm("Vil du rydde signal-log?")) {
+        localStorage.removeItem("signalLog");
+        renderLog();
+        updateLastUpdated();
+      }
+    };
+
+    // ---------- Watchlist ----------
     const tickerInput = document.getElementById("tickerInput");
     const tickerList = document.getElementById("tickerList");
 
@@ -181,10 +326,13 @@
       renderTickers();
     };
 
-    // Init
+    // ---------- Init ----------
     renderTickers();
+    renderLog();
+    updateLastUpdated();
+
     const saved = localStorage.getItem("marketState");
-    if (saved && preset[saved]) setState(saved);
+    if (saved && preset[saved]) setState(saved, {log:false});
     else resetState();
   </script>
 </body>
