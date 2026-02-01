@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Markedsoverblik (MVP)</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 24px; max-width: 900px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    button { padding: 10px 12px; border: 1px solid #ccc; border-radius: 10px; background: #fff; cursor: pointer; }
+    button.primary { border-color: #111; font-weight: 600; }
+    .card { border: 1px solid #e5e5e5; border-radius: 14px; padding: 16px; margin: 12px 0; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; }
+    input { padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+    ul { padding-left: 18px; }
+    .muted { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Markedsoverblik (MVP)</h1>
+  <p class="muted">Demo uden real-time data. Formål: klikbar prototype.</p>
+
+  <div class="card">
+    <h2>Vælg market state</h2>
+    <div class="row">
+      <button id="btnRiskOn">Risk-on</button>
+      <button id="btnRiskOff">Risk-off</button>
+      <button id="btnTrend">Trend</button>
+      <button id="btnBalance">Balance</button>
+      <button id="btnReset" class="primary">Reset</button>
+    </div>
+
+    <div>
+      <div class="badge" id="stateBadge">State: (ingen)</div>
+      <div class="badge" id="confBadge">Confidence: (ingen)</div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>Forklaring</h3>
+      <ul id="explainList">
+        <li class="muted">Vælg en state for at se forklaring.</li>
+      </ul>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>“Hvad gør man typisk?” (uddannelse)</h3>
+      <p id="actionText" class="muted">Vælg en state.</p>
+      <p class="muted" style="font-size: 13px;">
+        Disclaimer: Dette er ikke investeringsrådgivning. Kun information/uddannelse.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Watchlist (demo)</h2>
+    <div class="row">
+      <input id="tickerInput" placeholder="Skriv ticker, fx NOVO-B" />
+      <button id="addTicker" class="primary">Tilføj</button>
+      <button id="clearTickers">Ryd</button>
+    </div>
+    <ul id="tickerList"></ul>
+  </div>
+
+  <script>
+    const stateBadge = document.getElementById("stateBadge");
+    const confBadge  = document.getElementById("confBadge");
+    const explainList = document.getElementById("explainList");
+    const actionText = document.getElementById("actionText");
+
+    const preset = {
+      "Risk-on": {
+        confidence: "Middel",
+        explain: ["Volatilitet falder", "Aktieindeks bryder opad", "Kreditspænd strammer (proxy)"],
+        action: "Mange øger gradvist risiko eller holder sig med trenden, men styrer position sizing."
+      },
+      "Risk-off": {
+        confidence: "Middel",
+        explain: ["Volatilitet stiger", "Indeks under glidende gennemsnit", "Flugt til sikkerhed"],
+        action: "Mange reducerer risiko, hæver cash eller søger defensiv eksponering."
+      },
+      "Trend": {
+        confidence: "Høj",
+        explain: ["Higher highs/lows", "Pullbacks bliver købt", "Markedet accepterer højere priser"],
+        action: "Trendfølgere handler ofte med stop under struktur og lader vinderne løbe."
+      },
+      "Balance": {
+        confidence: "Middel",
+        explain: ["Sideways range", "Pris roterer omkring ‘fair value’", "Brud kræver ny info"],
+        action: "Mange handler range (køb lavt/sælg højt) indtil der kommer et klart breakout."
+      }
+    };
+
+    function setState(name) {
+      localStorage.setItem("marketState", name);
+      stateBadge.textContent = "State: " + name;
+      confBadge.textContent = "Confidence: " + preset[name].confidence;
+
+      explainList.innerHTML = "";
+      preset[name].explain.forEach(x => {
+        const li = document.createElement("li");
+        li.textContent = x;
+        explainList.appendChild(li);
+      });
+
+      actionText.textContent = preset[name].action;
+      highlightButton(name);
+    }
+
+    function resetState() {
+      localStorage.removeItem("marketState");
+      stateBadge.textContent = "State: (ingen)";
+      confBadge.textContent = "Confidence: (ingen)";
+      explainList.innerHTML = '<li class="muted">Vælg en state for at se forklaring.</li>';
+      actionText.textContent = "Vælg en state.";
+      highlightButton(null);
+    }
+
+    function highlightButton(name) {
+      ["btnRiskOn","btnRiskOff","btnTrend","btnBalance"].forEach(id => {
+        document.getElementById(id).classList.remove("primary");
+      });
+      if (name === "Risk-on") document.getElementById("btnRiskOn").classList.add("primary");
+      if (name === "Risk-off") document.getElementById("btnRiskOff").classList.add("primary");
+      if (name === "Trend") document.getElementById("btnTrend").classList.add("primary");
+      if (name === "Balance") document.getElementById("btnBalance").classList.add("primary");
+    }
+
+    document.getElementById("btnRiskOn").onclick = () => setState("Risk-on");
+    document.getElementById("btnRiskOff").onclick = () => setState("Risk-off");
+    document.getElementById("btnTrend").onclick = () => setState("Trend");
+    document.getElementById("btnBalance").onclick = () => setState("Balance");
+    document.getElementById("btnReset").onclick = resetState;
+
+    // Watchlist
+    const tickerInput = document.getElementById("tickerInput");
+    const tickerList = document.getElementById("tickerList");
+
+    function loadTickers() {
+      return JSON.parse(localStorage.getItem("tickers") || "[]");
+    }
+    function saveTickers(arr) {
+      localStorage.setItem("tickers", JSON.stringify(arr));
+      renderTickers();
+    }
+    function renderTickers() {
+      const arr = loadTickers();
+      tickerList.innerHTML = "";
+      if (arr.length === 0) {
+        const li = document.createElement("li");
+        li.className = "muted";
+        li.textContent = "Ingen tickers endnu.";
+        tickerList.appendChild(li);
+        return;
+      }
+      arr.forEach((t, idx) => {
+        const li = document.createElement("li");
+        li.textContent = t + " ";
+        const del = document.createElement("button");
+        del.textContent = "Slet";
+        del.style.marginLeft = "8px";
+        del.onclick = () => {
+          const next = loadTickers().filter((_, i) => i !== idx);
+          saveTickers(next);
+        };
+        li.appendChild(del);
+        tickerList.appendChild(li);
+      });
+    }
+
+    document.getElementById("addTicker").onclick = () => {
+      const t = tickerInput.value.trim().toUpperCase();
+      if (!t) return;
+      const arr = loadTickers();
+      if (!arr.includes(t)) arr.push(t);
+      saveTickers(arr);
+      tickerInput.value = "";
+    };
+
+    document.getElementById("clearTickers").onclick = () => {
+      localStorage.removeItem("tickers");
+      renderTickers();
+    };
+
+    // Init
+    renderTickers();
+    const saved = localStorage.getItem("marketState");
+    if (saved && preset[saved]) setState(saved);
+    else resetState();
+  </script>
+</body>
+</html>
