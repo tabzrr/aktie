@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="da">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -36,6 +37,11 @@
     <p class="muted" id="asof">Indlæser…</p>
 
     <div class="card">
+      <div class="card">
+  <h2>Pris (seneste dage)</h2>
+  <p class="muted" style="margin-top:6px;">Lukkepriser fra din datafil.</p>
+  <canvas id="priceChart" height="120"></canvas>
+</div>
       <h2>Status</h2>
       <div class="grid">
         <div class="kpi"><div class="k">Lukkepris</div><div class="v" id="close">—</div></div>
@@ -95,7 +101,38 @@
           li.textContent = x;
           ul.appendChild(li);
         });
-      })
+      // --- Chart ---
+if (Array.isArray(d.history) && d.history.length > 1) {
+  const labels = d.history.map(x => x.date);
+  const prices = d.history.map(x => x.close);
+
+  const canvas = document.getElementById("priceChart");
+  if (canvas) {
+    if (window.__novoChart) window.__novoChart.destroy();
+
+    window.__novoChart = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: `${d.ticker} close`,
+          data: prices,
+          tension: 0.25,
+          pointRadius: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { maxTicksLimit: 6 } },
+          y: { ticks: { maxTicksLimit: 6 } }
+        }
+      }
+    });
+  }
+}
+})
       .catch(() => {
         document.getElementById("asof").textContent = "Kunne ikke hente ./data/novo.json (tjek filnavn/sted).";
       });
