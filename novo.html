@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Novo (demo)</title>
+  <title>Novo</title>
   <style>
     body{font-family:system-ui,Arial,sans-serif;margin:0}
     .nav{position:sticky;top:0;background:#fff;border-bottom:1px solid #e7e7e7}
@@ -14,6 +14,10 @@
     .wrap{max-width:980px;margin:0 auto;padding:18px}
     .card{border:1px solid #e7e7e7;border-radius:16px;padding:16px;margin:14px 0}
     .muted{color:#666}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .kpi{border:1px solid #eee;border-radius:14px;padding:12px}
+    .k{font-size:12px;color:#666}
+    .v{font-size:18px;font-weight:700}
   </style>
 </head>
 <body>
@@ -28,17 +32,73 @@
   </div>
 
   <div class="wrap">
-    <h1>Novo (demo)</h1>
-    <p class="muted">Her kan du senere vise AMT/indikatorer kun for Novo.</p>
+    <h1>Novo Nordisk (demo)</h1>
+    <p class="muted" id="asof">Indlæser…</p>
 
     <div class="card">
-      <h2>Plan til næste version</h2>
-      <ul>
-        <li>Vis “Trend / Balance” for Novo</li>
-        <li>Vis 3 forklaringer (fx structure, volatility, volume proxy)</li>
-        <li>Tilføj en lille “signal-log” pr. aktie</li>
-      </ul>
+      <h2>Status</h2>
+      <div class="grid">
+        <div class="kpi"><div class="k">Lukkepris</div><div class="v" id="close">—</div></div>
+        <div class="kpi"><div class="k">Dagsændring</div><div class="v" id="chg">—</div></div>
+        <div class="kpi"><div class="k">Trend (MA20 / MA50 / MA200)</div><div class="v" id="trend">—</div></div>
+        <div class="kpi"><div class="k">20d volatilitet (proxy)</div><div class="v" id="vol">—</div></div>
+        <div class="kpi"><div class="k">52w range</div><div class="v" id="range">—</div></div>
+        <div class="kpi"><div class="k">Signal (uddannelse)</div><div class="v" id="signal">—</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Forklaring</h2>
+      <ul id="why" class="muted"></ul>
+      <p class="muted" style="font-size:13px;margin-top:12px;">
+        Disclaimer: Ikke investeringsrådgivning. Kun information/uddannelse.
+      </p>
     </div>
   </div>
+
+  <script>
+    function fmt(n){ return (typeof n==="number") ? n.toFixed(2) : "—"; }
+
+    function makeSignal(d){
+      // super enkel logik til MVP:
+      // trend up hvis close > MA50, “stærk” hvis close > MA200
+      if (d.close > d.ma200) return "Trend op (stærk)";
+      if (d.close > d.ma50) return "Trend op (moderat)";
+      if (d.close < d.ma50) return "Svag/neutral";
+      return "Neutral";
+    }
+
+    function makeWhy(d){
+      const items = [];
+      items.push(`Pris vs MA50: ${d.close > d.ma50 ? "over" : "under"} (trend-proxy)`);
+      items.push(`Pris vs MA200: ${d.close > d.ma200 ? "over" : "under"} (lang trend)`);
+      items.push(`Volatilitet 20d: ca. ${fmt(d.vol20)}% (risk-proxy)`);
+      return items;
+    }
+
+    fetch("./data/novo.json")
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById("asof").textContent = `Data pr. ${d.asOf} (ticker: ${d.ticker})`;
+        document.getElementById("close").textContent = `${fmt(d.close)} DKK`;
+        document.getElementById("chg").textContent = `${fmt(d.changePct)}%`;
+        document.getElementById("trend").textContent = `${fmt(d.ma20)} / ${fmt(d.ma50)} / ${fmt(d.ma200)}`;
+        document.getElementById("vol").textContent = `${fmt(d.vol20)}%`;
+        document.getElementById("range").textContent = `${fmt(d.low52w)} – ${fmt(d.high52w)}`;
+        const signal = makeSignal(d);
+        document.getElementById("signal").textContent = signal;
+
+        const ul = document.getElementById("why");
+        ul.innerHTML = "";
+        makeWhy(d).forEach(x => {
+          const li = document.createElement("li");
+          li.textContent = x;
+          ul.appendChild(li);
+        });
+      })
+      .catch(() => {
+        document.getElementById("asof").textContent = "Kunne ikke hente ./data/novo.json (tjek filnavn/sted).";
+      });
+  </script>
 </body>
 </html>
