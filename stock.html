@@ -12,6 +12,16 @@
     .brand{font-weight:800}
     a{text-decoration:none;color:var(--text);padding:8px 10px;border-radius:10px}
     a:hover{background:#f4f4f4}
+
+    /* Aktier dropdown */
+    .drop{position:relative;display:inline-block}
+    .drop > .dropbtn{border:0;background:transparent;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;font:inherit}
+    .drop > .dropbtn:hover{background:#f4f4f4}
+    .menu{display:none;position:absolute;top:40px;left:0;min-width:180px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:6px;z-index:20}
+    .menu a{display:block;padding:10px 10px;border-radius:10px}
+    .menu a:hover{background:#f4f4f4}
+    .drop:hover .menu{display:block}
+
     .wrap{max-width:980px;margin:0 auto;padding:18px}
     .card{border:1px solid var(--border);border-radius:16px;padding:16px;margin:14px 0;background:#fff}
     .muted{color:var(--muted)}
@@ -38,7 +48,15 @@
     <div class="nav-inner">
       <div class="brand">Aktie-MVP</div>
       <a href="./index.html">Forside</a>
-      <a href="./novo.html">Novo</a>
+
+      <div class="drop">
+        <button class="dropbtn">Aktier ▾</button>
+        <div class="menu">
+          <a href="./stock.html?t=novo">Novo</a>
+          <a href="./stock.html?t=vestas">Vestas</a>
+        </div>
+      </div>
+
       <a href="./laering.html">Læring</a>
       <a href="./om.html">Om</a>
     </div>
@@ -58,7 +76,7 @@
       <div style="margin-top:10px;">
         <div class="scoreBox">
           <div class="scoreNum" id="scoreNum">—</div>
-          <div class="muted" id="scoreText">Timing-kompas (0–100)</div>
+          <div class="muted">Timing-kompas (0–100)</div>
         </div>
         <p class="muted small" id="scoreWhy" style="margin-top:6px;">—</p>
       </div>
@@ -122,18 +140,15 @@
     function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
 
     function compute(d){
-      // Trend: pris over/under MA50/MA200
       let trendScore = 50;
       if (d.close > d.ma50) trendScore += 15; else trendScore -= 15;
       if (d.close > d.ma200) trendScore += 20; else trendScore -= 20;
       trendScore = clamp(trendScore, 0, 100);
 
-      // “Heat” proxy: afstand til MA50 (jo længere væk, jo mere strukket)
       const dist = (d.ma50 && d.ma50 !== 0) ? ((d.close - d.ma50) / d.ma50) : 0;
       let heatScore = 70 - (Math.abs(dist) * 800);
       heatScore = clamp(heatScore, 0, 100);
 
-      // Risiko: vol20 (lavere vol = “nemmere timing”)
       let riskScore = 80 - (d.vol20 * 10);
       riskScore = clamp(riskScore, 0, 100);
 
@@ -181,18 +196,15 @@
       return "Neutral/svag trend: Mange sælger typisk ind i styrke/range-toppe eller reducerer risiko, hvis prisen bryder ned under vigtige niveauer (fx MA200).";
     }
 
-    // Crosshair plugin (lodret + vandret)
     const crosshairPlugin = {
       id: 'crosshair',
       afterDraw(chart) {
         const tooltip = chart.tooltip;
         if (!tooltip || !tooltip.getActiveElements || !tooltip.getActiveElements().length) return;
-
         const ctx = chart.ctx;
         const el = tooltip.getActiveElements()[0].element;
         const x = el.x;
         const y = el.y;
-
         const yScale = chart.scales.y;
         const xScale = chart.scales.x;
 
@@ -200,17 +212,8 @@
         ctx.strokeStyle = 'rgba(0,0,0,0.22)';
         ctx.lineWidth = 1;
 
-        // vertical
-        ctx.beginPath();
-        ctx.moveTo(x, yScale.top);
-        ctx.lineTo(x, yScale.bottom);
-        ctx.stroke();
-
-        // horizontal
-        ctx.beginPath();
-        ctx.moveTo(xScale.left, y);
-        ctx.lineTo(xScale.right, y);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, yScale.top); ctx.lineTo(x, yScale.bottom); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xScale.left, y); ctx.lineTo(xScale.right, y); ctx.stroke();
 
         ctx.restore();
       }
@@ -248,20 +251,17 @@
     }
 
     window.addEventListener("DOMContentLoaded", () => {
-      const t = (getParam("t") || "novo").toLowerCase(); // default = novo
+      const t = (getParam("t") || "novo").toLowerCase();
       const url = `./data/${t}.json?v=` + Date.now();
 
       fetch(url)
         .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(d => {
-          // Title
           document.getElementById("title").textContent = (d.name ? d.name : `${d.ticker} (demo)`);
           document.title = d.name ? d.name : d.ticker;
 
-          // Header
           document.getElementById("asof").textContent = `Data pr. ${d.asOf} (ticker: ${d.ticker})`;
 
-          // Status
           document.getElementById("close").textContent = `${fmt(d.close)} DKK`;
           document.getElementById("chg").textContent   = `${fmt(d.changePct)}%`;
           document.getElementById("trend").textContent = `${fmt(d.ma20)} / ${fmt(d.ma50)} / ${fmt(d.ma200)}`;
@@ -269,7 +269,6 @@
           document.getElementById("range").textContent = `${fmt(d.low52w)} – ${fmt(d.high52w)}`;
           document.getElementById("signal").textContent = makeSignal(d);
 
-          // Kompas
           const meta = compute(d);
           document.getElementById("scoreNum").textContent = meta.score;
           document.getElementById("scoreWhy").textContent = meta.why;
@@ -277,17 +276,14 @@
           document.getElementById("heatPill").textContent   = `Momentum: ${meta.heat}`;
           document.getElementById("riskPill").textContent   = `Risiko: ${meta.risk}`;
 
-          // Tabs
           renderScenario("buy", meta);
           document.getElementById("tabBuy").onclick = () => renderScenario("buy", meta);
           document.getElementById("tabSell").onclick = () => renderScenario("sell", meta);
 
-          // Script
           document.getElementById("makeScriptBtn").onclick = () => {
             document.getElementById("scriptBox").value = makeScript(d, meta);
           };
 
-          // Forklaring
           const ul = document.getElementById("why");
           ul.innerHTML = "";
           makeWhyBullets(d, meta).forEach(x => {
@@ -296,7 +292,6 @@
             ul.appendChild(li);
           });
 
-          // Chart
           if (Array.isArray(d.history) && d.history.length > 1) {
             const labels = d.history.map(x => x.date);
             const prices = d.history.map(x => x.close);
