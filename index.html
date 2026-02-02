@@ -18,7 +18,7 @@
     .drop{position:relative;display:inline-block}
     .drop > .dropbtn{border:0;background:transparent;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;font:inherit}
     .drop > .dropbtn:hover{background:#f4f4f4}
-    .menu{display:none;position:absolute;top:40px;left:0;min-width:180px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:6px;z-index:20}
+    .menu{display:none;position:absolute;top:40px;left:0;min-width:200px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:6px;z-index:20}
     .menu a{display:block;padding:10px 10px;border-radius:10px}
     .menu a:hover{background:#f4f4f4}
     .drop:hover .menu{display:block}
@@ -31,12 +31,24 @@
     .btn{border:1px solid #ddd;border-radius:12px;padding:10px 12px;background:#fff;cursor:pointer;font-weight:800}
     .btn:hover{background:#f6f6f6}
     .btn.primary{border-color:#111}
+    .btn.danger{border-color:#c33}
+    .btn.danger:hover{background:#fff5f5}
+
     .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .stockCard{border:1px solid #eee;border-radius:14px;padding:14px}
     .stockTitle{font-size:16px;font-weight:900;margin:0 0 6px 0}
     .small{font-size:13px}
     .divider{height:1px;background:#eee;margin:14px 0}
-    @media (max-width:700px){ .grid2{grid-template-columns:1fr} }
+
+    .formRow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+    .field{display:flex;flex-direction:column;gap:6px}
+    input{
+      border:1px solid #e7e7e7;border-radius:12px;padding:10px 12px;
+      font:inherit;min-width:220px
+    }
+    .notice{font-size:13px;color:var(--muted);margin:8px 0 0}
+    .error{color:#b00020}
+    @media (max-width:700px){ .grid2{grid-template-columns:1fr} input{min-width:100%} }
   </style>
 </head>
 <body>
@@ -48,10 +60,8 @@
 
         <div class="drop">
           <button class="dropbtn">Aktier ▾</button>
-          <div class="menu">
-            <a href="./stock.html?t=novo">Novo</a>
-            <a href="./stock.html?t=vestas">Vestas</a>
-            <a href="./stock.html?t=dsv">DSV</a>
+          <div class="menu" id="stocksMenu">
+            <!-- fyldes af JS -->
           </div>
         </div>
 
@@ -67,40 +77,32 @@
     <h1>Markedsoversigt (MVP)</h1>
     <p class="muted">Klikbar prototype. Ikke real-time data. Kun information/uddannelse.</p>
 
-    <div class="card">
+    <div class="card" id="aktier">
       <h2>Aktier</h2>
-      <p class="muted small">Vælg en aktie for at se timing-kompas, graf, scenarier og video-script.</p>
+      <p class="muted small">Tilføj aktier her, så dukker de automatisk op i både forsiden og top-menuen.</p>
 
-      <div class="grid2" style="margin-top:10px;">
-        <div class="stockCard">
-          <p class="stockTitle">Novo Nordisk</p>
-          <p class="muted small" style="margin:0 0 10px 0;">Åbner aktie-siden.</p>
-          <div class="row">
-            <a class="btn primary" href="./stock.html?t=novo">Åbn Novo</a>
+      <div class="card" style="margin-top:12px;">
+        <h3 style="margin:0 0 10px 0;">Tilføj aktie</h3>
+        <div class="formRow">
+          <div class="field">
+            <div class="small muted">Fil-id (matcher data/ID.json)</div>
+            <input id="idInput" placeholder="fx dsv, vestas, novo" />
           </div>
-        </div>
-
-        <div class="stockCard">
-          <p class="stockTitle">Vestas</p>
-          <p class="muted small" style="margin:0 0 10px 0;">Åbner aktie-siden.</p>
-          <div class="row">
-            <a class="btn primary" href="./stock.html?t=vestas">Åbn Vestas</a>
+          <div class="field">
+            <div class="small muted">Visningsnavn</div>
+            <input id="nameInput" placeholder="fx DSV, Vestas, Novo Nordisk" />
           </div>
+          <button class="btn primary" id="addBtn">Tilføj</button>
         </div>
+        <p class="notice" id="addMsg"></p>
+        <p class="notice">
+          Tip: Lav først datafilen i <b>data/</b> (fx <b>data/dsv.json</b>). Når den findes, kan du tilføje den her.
+        </p>
       </div>
-      <div class="stockCard">
-  <p class="stockTitle">DSV</p>
-  <p class="muted small" style="margin:0 0 10px 0;">Åbner aktie-siden.</p>
-  <div class="row">
-    <a class="btn primary" href="./stock.html?t=dsv">Åbn DSV</a>
-  </div>
-</div>
-
 
       <div class="divider"></div>
-      <p class="muted small" style="margin:0;">
-        Tip: Når du laver en ny datafil (fx <b>data/dsv.json</b>), kan du åbne den med <b>stock.html?t=dsv</b>.
-      </p>
+
+      <div class="grid2" id="stocksGrid"></div>
     </div>
 
     <div class="card">
@@ -135,6 +137,157 @@
   </div>
 
   <script>
+    // --- shared: stocks list in localStorage ---
+    const LS_KEY = "stocks_v1";
+    const DEFAULT_STOCKS = [
+      { id: "novo",   name: "Novo Nordisk" },
+      { id: "vestas", name: "Vestas" },
+      { id: "dsv",    name: "DSV" }
+    ];
+
+    function cleanId(s){
+      return String(s || "").trim().toLowerCase();
+    }
+
+    function isValidId(id){
+      // datafilnavn-sikkert: a-z 0-9 _ -
+      return /^[a-z0-9_-]+$/.test(id);
+    }
+
+    function loadStocks(){
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return DEFAULT_STOCKS.slice();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_STOCKS.slice();
+        // sanitize
+        return parsed
+          .map(x => ({ id: cleanId(x.id), name: String(x.name || "").trim() || cleanId(x.id) }))
+          .filter(x => x.id && isValidId(x.id));
+      } catch {
+        return DEFAULT_STOCKS.slice();
+      }
+    }
+
+    function saveStocks(list){
+      localStorage.setItem(LS_KEY, JSON.stringify(list));
+    }
+
+    function uniqueById(list){
+      const seen = new Set();
+      const out = [];
+      for (const s of list){
+        if (!seen.has(s.id)){
+          seen.add(s.id);
+          out.push(s);
+        }
+      }
+      return out;
+    }
+
+    async function dataFileExists(id){
+      // prøv at hente json for at sikre den findes
+      const url = `./data/${id}.json?v=${Date.now()}`;
+      try{
+        const r = await fetch(url, { cache: "no-store" });
+        return r.ok;
+      }catch{
+        return false;
+      }
+    }
+
+    function renderMenu(stocks){
+      const menu = document.getElementById("stocksMenu");
+      menu.innerHTML = "";
+      stocks.forEach(s => {
+        const a = document.createElement("a");
+        a.href = `./stock.html?t=${encodeURIComponent(s.id)}`;
+        a.textContent = s.name;
+        menu.appendChild(a);
+      });
+    }
+
+    function renderGrid(stocks){
+      const grid = document.getElementById("stocksGrid");
+      grid.innerHTML = "";
+
+      stocks.forEach(s => {
+        const card = document.createElement("div");
+        card.className = "stockCard";
+
+        const title = document.createElement("p");
+        title.className = "stockTitle";
+        title.textContent = s.name;
+
+        const sub = document.createElement("p");
+        sub.className = "muted small";
+        sub.style.margin = "0 0 10px 0";
+        sub.textContent = `Åbner ./stock.html?t=${s.id}`;
+
+        const row = document.createElement("div");
+        row.className = "row";
+
+        const open = document.createElement("a");
+        open.className = "btn primary";
+        open.href = `./stock.html?t=${encodeURIComponent(s.id)}`;
+        open.textContent = "Åbn";
+
+        const remove = document.createElement("button");
+        remove.className = "btn danger";
+        remove.textContent = "Fjern";
+        remove.onclick = () => {
+          const next = loadStocks().filter(x => x.id !== s.id);
+          saveStocks(next);
+          const updated = loadStocks();
+          renderMenu(updated);
+          renderGrid(updated);
+        };
+
+        row.appendChild(open);
+        row.appendChild(remove);
+
+        card.appendChild(title);
+        card.appendChild(sub);
+        card.appendChild(row);
+
+        grid.appendChild(card);
+      });
+    }
+
+    function setMsg(text, isError){
+      const el = document.getElementById("addMsg");
+      el.textContent = text || "";
+      el.classList.toggle("error", !!isError);
+    }
+
+    async function onAdd(){
+      const id = cleanId(document.getElementById("idInput").value);
+      const nameRaw = String(document.getElementById("nameInput").value || "").trim();
+      const name = nameRaw || id.toUpperCase();
+
+      if (!id) return setMsg("Skriv et id (fx dsv).", true);
+      if (!isValidId(id)) return setMsg("Id må kun indeholde a-z, 0-9, _ og -", true);
+
+      setMsg("Tjekker om datafilen findes…", false);
+      const ok = await dataFileExists(id);
+      if (!ok){
+        return setMsg(`Fandt ikke data/${id}.json. Opret den først i data-mappen.`, true);
+      }
+
+      let stocks = loadStocks();
+      stocks.push({ id, name });
+      stocks = uniqueById(stocks);
+      saveStocks(stocks);
+
+      renderMenu(stocks);
+      renderGrid(stocks);
+
+      document.getElementById("idInput").value = "";
+      document.getElementById("nameInput").value = "";
+      setMsg(`Tilføjet: ${name}`, false);
+    }
+
+    // "Sidst opdateret"
     (function(){
       const d = new Date();
       const pad = (n)=> String(n).padStart(2,'0');
@@ -142,31 +295,12 @@
       document.getElementById("lastUpdated").textContent = "Sidst opdateret: " + ts;
     })();
 
+    // Market state demo
     const STATES = {
-      riskon: {
-        name: "Risk-on",
-        conf: "Middel",
-        bullets: ["Volatilitet falder","Aktieindeks bryder opad","Kreditspænd strammer (proxy)"],
-        typical: "Mange øger gradvist risiko eller følger trenden, men styrer position sizing."
-      },
-      riskoff: {
-        name: "Risk-off",
-        conf: "Middel",
-        bullets: ["Volatilitet stiger","Aktieindeks svækkes","Likviditet/risiko appetit falder (proxy)"],
-        typical: "Mange reducerer risiko, øger cash/defensive eksponeringer og undgår ‘svage breakouts’."
-      },
-      trend: {
-        name: "Trend",
-        conf: "Middel",
-        bullets: ["Markedet accepterer højere/lavere priser over tid","Pullbacks bliver ofte købt/soldt i trendens retning","Signaler virker bedre end i range"],
-        typical: "Mange trader i trendens retning og bruger trailing stop under/over struktur."
-      },
-      balance: {
-        name: "Balance",
-        conf: "Middel",
-        bullets: ["Sideways range","Pris roterer omkring ‘fair value’","Brud kræver ny info"],
-        typical: "Mange handler range (køb lavt/sælg højt) indtil der kommer et klart breakout."
-      }
+      riskon: { name:"Risk-on", conf:"Middel", bullets:["Volatilitet falder","Aktieindeks bryder opad","Kreditspænd strammer (proxy)"], typical:"Mange øger gradvist risiko eller følger trenden, men styrer position sizing." },
+      riskoff:{ name:"Risk-off",conf:"Middel", bullets:["Volatilitet stiger","Aktieindeks svækkes","Likviditet/risiko appetit falder (proxy)"], typical:"Mange reducerer risiko, øger cash/defensive eksponeringer og undgår ‘svage breakouts’." },
+      trend:  { name:"Trend",   conf:"Middel", bullets:["Markedet accepterer højere/lavere priser over tid","Pullbacks bliver ofte købt/soldt i trendens retning","Signaler virker bedre end i range"], typical:"Mange trader i trendens retning og bruger trailing stop under/over struktur." },
+      balance:{ name:"Balance", conf:"Middel", bullets:["Sideways range","Pris roterer omkring ‘fair value’","Brud kræver ny info"], typical:"Mange handler range (køb lavt/sælg højt) indtil der kommer et klart breakout." }
     };
 
     function setState(key){
@@ -195,8 +329,15 @@
       document.getElementById("explain").innerHTML = "";
       document.getElementById("typical").textContent = "";
     });
+
+    // Init UI
+    const stocks = loadStocks();
+    renderMenu(stocks);
+    renderGrid(stocks);
+
+    document.getElementById("addBtn").addEventListener("click", onAdd);
+    document.getElementById("idInput").addEventListener("keydown", (e)=>{ if(e.key==="Enter") onAdd(); });
+    document.getElementById("nameInput").addEventListener("keydown", (e)=>{ if(e.key==="Enter") onAdd(); });
   </script>
 </body>
 </html>
-
-
