@@ -17,7 +17,7 @@
     .drop{position:relative;display:inline-block}
     .drop > .dropbtn{border:0;background:transparent;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;font:inherit}
     .drop > .dropbtn:hover{background:#f4f4f4}
-    .menu{display:none;position:absolute;top:40px;left:0;min-width:180px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:6px;z-index:20}
+    .menu{display:none;position:absolute;top:40px;left:0;min-width:200px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:6px;z-index:20}
     .menu a{display:block;padding:10px 10px;border-radius:10px}
     .menu a:hover{background:#f4f4f4}
     .drop:hover .menu{display:block}
@@ -50,12 +50,8 @@
       <a href="./index.html">Forside</a>
 
       <div class="drop">
-        <button class="dropbtn">Aktier ▾</button>
-        <div class="menu">
-          <a href="./stock.html?t=novo">Novo</a>
-          <a href="./stock.html?t=vestas">Vestas</a>
-          <a href="./stock.html?t=dsv">DSV</a>
-        </div>
+        <button class="dropbtn" id="dropLabel">Aktier ▾</button>
+        <div class="menu" id="stocksMenu"></div>
       </div>
 
       <a href="./laering.html">Læring</a>
@@ -137,6 +133,54 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
+    // --- shared: stocks list in localStorage ---
+    const LS_KEY = "stocks_v1";
+    const DEFAULT_STOCKS = [
+      { id: "novo",   name: "Novo Nordisk" },
+      { id: "vestas", name: "Vestas" },
+      { id: "dsv",    name: "DSV" }
+    ];
+
+    function cleanId(s){ return String(s || "").trim().toLowerCase(); }
+    function isValidId(id){ return /^[a-z0-9_-]+$/.test(id); }
+
+    function loadStocks(){
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return DEFAULT_STOCKS.slice();
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_STOCKS.slice();
+        return parsed
+          .map(x => ({ id: cleanId(x.id), name: String(x.name || "").trim() || cleanId(x.id) }))
+          .filter(x => x.id && isValidId(x.id));
+      } catch {
+        return DEFAULT_STOCKS.slice();
+      }
+    }
+
+    function renderMenu(stocks, currentId){
+      const menu = document.getElementById("stocksMenu");
+      menu.innerHTML = "";
+      stocks.forEach(s => {
+        const a = document.createElement("a");
+        a.href = `./stock.html?t=${encodeURIComponent(s.id)}`;
+        a.textContent = (s.id === currentId) ? `✓ ${s.name}` : s.name;
+        menu.appendChild(a);
+      });
+      // link til at tilføje flere
+      const sep = document.createElement("div");
+      sep.style.height = "1px";
+      sep.style.background = "#eee";
+      sep.style.margin = "6px";
+      menu.appendChild(sep);
+
+      const add = document.createElement("a");
+      add.href = "./index.html#aktier";
+      add.textContent = "Tilføj flere aktier…";
+      menu.appendChild(add);
+    }
+
+    // --- app logic ---
     function fmt(n){ return (typeof n==="number") ? n.toFixed(2) : "—"; }
     function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
 
@@ -252,9 +296,13 @@
     }
 
     window.addEventListener("DOMContentLoaded", () => {
-      const t = (getParam("t") || "novo").toLowerCase();
-      const url = `./data/${t}.json?v=` + Date.now();
+      const stocks = loadStocks();
+      const fallback = (stocks[0] && stocks[0].id) ? stocks[0].id : "novo";
+      const t = cleanId(getParam("t") || fallback);
 
+      renderMenu(stocks, t);
+
+      const url = `./data/${t}.json?v=` + Date.now();
       fetch(url)
         .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(d => {
@@ -316,10 +364,7 @@
                   }
                 },
                 interaction: { mode: "index", intersect: false },
-                scales: {
-                  x: { ticks: { maxTicksLimit: 6 } },
-                  y: { ticks: { maxTicksLimit: 6 } }
-                }
+                scales: { x: { ticks: { maxTicksLimit: 6 } }, y: { ticks: { maxTicksLimit: 6 } } }
               },
               plugins: [crosshairPlugin]
             });
