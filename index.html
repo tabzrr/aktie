@@ -13,6 +13,16 @@
     .brand{font-weight:800}
     a{text-decoration:none;color:var(--text);padding:8px 10px;border-radius:10px}
     a:hover{background:#f4f4f4}
+
+    /* Aktier dropdown */
+    .drop{position:relative;display:inline-block}
+    .drop > .dropbtn{border:0;background:transparent;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;font:inherit}
+    .drop > .dropbtn:hover{background:#f4f4f4}
+    .menu{display:none;position:absolute;top:40px;left:0;min-width:180px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:6px;z-index:20}
+    .menu a{display:block;padding:10px 10px;border-radius:10px}
+    .menu a:hover{background:#f4f4f4}
+    .drop:hover .menu{display:block}
+
     .wrap{max-width:980px;margin:0 auto;padding:18px}
     .card{border:1px solid var(--border);border-radius:16px;padding:16px;margin:14px 0;background:#fff}
     .muted{color:var(--muted)}
@@ -35,10 +45,19 @@
       <div class="left">
         <div class="brand">Aktie-MVP</div>
         <a href="./index.html">Forside</a>
-        <a href="./novo.html">Novo</a>
+
+        <div class="drop">
+          <button class="dropbtn">Aktier ▾</button>
+          <div class="menu">
+            <a href="./stock.html?t=novo">Novo</a>
+            <a href="./stock.html?t=vestas">Vestas</a>
+          </div>
+        </div>
+
         <a href="./laering.html">Læring</a>
         <a href="./om.html">Om</a>
       </div>
+
       <div class="pill muted" id="lastUpdated">Sidst opdateret: —</div>
     </div>
   </div>
@@ -47,7 +66,6 @@
     <h1>Markedsoversigt (MVP)</h1>
     <p class="muted">Klikbar prototype. Ikke real-time data. Kun information/uddannelse.</p>
 
-    <!-- AKTIER -->
     <div class="card">
       <h2>Aktier</h2>
       <p class="muted small">Vælg en aktie for at se timing-kompas, graf, scenarier og video-script.</p>
@@ -55,31 +73,27 @@
       <div class="grid2" style="margin-top:10px;">
         <div class="stockCard">
           <p class="stockTitle">Novo Nordisk</p>
-          <p class="muted small" style="margin:0 0 10px 0;">Åbner aktie-siden (data/novo.json).</p>
+          <p class="muted small" style="margin:0 0 10px 0;">Åbner aktie-siden.</p>
           <div class="row">
             <a class="btn primary" href="./stock.html?t=novo">Åbn Novo</a>
-            <a class="btn" href="./data/novo.json">Se data</a>
           </div>
         </div>
 
         <div class="stockCard">
           <p class="stockTitle">Vestas</p>
-          <p class="muted small" style="margin:0 0 10px 0;">Åbner aktie-siden (data/vestas.json).</p>
+          <p class="muted small" style="margin:0 0 10px 0;">Åbner aktie-siden.</p>
           <div class="row">
             <a class="btn primary" href="./stock.html?t=vestas">Åbn Vestas</a>
-            <a class="btn" href="./data/vestas.json">Se data</a>
           </div>
         </div>
       </div>
 
       <div class="divider"></div>
       <p class="muted small" style="margin:0;">
-        Tip: Når du laver en ny datafil (fx <b>data/dsv.json</b>), kan du åbne den med
-        <b>stock.html?t=dsv</b>.
+        Tip: Når du laver en ny datafil (fx <b>data/dsv.json</b>), kan du åbne den med <b>stock.html?t=dsv</b>.
       </p>
     </div>
 
-    <!-- MARKED (DIN MVP) -->
     <div class="card">
       <h2>Vælg market state</h2>
 
@@ -109,11 +123,9 @@
         </p>
       </div>
     </div>
-
   </div>
 
   <script>
-    // Sidst opdateret (lokalt)
     (function(){
       const d = new Date();
       const pad = (n)=> String(n).padStart(2,'0');
@@ -121,46 +133,29 @@
       document.getElementById("lastUpdated").textContent = "Sidst opdateret: " + ts;
     })();
 
-    // Market state demo-data (samme idé som før)
     const STATES = {
       riskon: {
         name: "Risk-on",
         conf: "Middel",
-        bullets: [
-          "Volatilitet falder",
-          "Aktieindeks bryder opad",
-          "Kreditspænd strammer (proxy)"
-        ],
+        bullets: ["Volatilitet falder","Aktieindeks bryder opad","Kreditspænd strammer (proxy)"],
         typical: "Mange øger gradvist risiko eller følger trenden, men styrer position sizing."
       },
       riskoff: {
         name: "Risk-off",
         conf: "Middel",
-        bullets: [
-          "Volatilitet stiger",
-          "Aktieindeks svækkes",
-          "Likviditet/risiko appetit falder (proxy)"
-        ],
+        bullets: ["Volatilitet stiger","Aktieindeks svækkes","Likviditet/risiko appetit falder (proxy)"],
         typical: "Mange reducerer risiko, øger cash/defensive eksponeringer og undgår ‘svage breakouts’."
       },
       trend: {
         name: "Trend",
         conf: "Middel",
-        bullets: [
-          "Markedet accepterer højere/lavere priser over tid",
-          "Pullbacks bliver ofte købt/soldt i trendens retning",
-          "Signaler virker bedre end i range"
-        ],
+        bullets: ["Markedet accepterer højere/lavere priser over tid","Pullbacks bliver ofte købt/soldt i trendens retning","Signaler virker bedre end i range"],
         typical: "Mange trader i trendens retning og bruger trailing stop under/over struktur."
       },
       balance: {
         name: "Balance",
         conf: "Middel",
-        bullets: [
-          "Sideways range",
-          "Pris roterer omkring ‘fair value’",
-          "Brud kræver ny info"
-        ],
+        bullets: ["Sideways range","Pris roterer omkring ‘fair value’","Brud kræver ny info"],
         typical: "Mange handler range (køb lavt/sælg højt) indtil der kommer et klart breakout."
       }
     };
@@ -179,11 +174,6 @@
       });
 
       document.getElementById("typical").textContent = s.typical;
-
-      // marker aktiv knap
-      document.querySelectorAll("button[data-state]").forEach(b=>{
-        b.classList.toggle("primary", b.getAttribute("data-state") === key);
-      });
     }
 
     document.querySelectorAll("button[data-state]").forEach(btn=>{
@@ -195,7 +185,6 @@
       document.getElementById("confPill").textContent = "Confidence: —";
       document.getElementById("explain").innerHTML = "";
       document.getElementById("typical").textContent = "";
-      document.querySelectorAll("button[data-state]").forEach(b=>b.classList.remove("primary"));
     });
   </script>
 </body>
