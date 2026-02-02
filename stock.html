@@ -41,6 +41,15 @@
     button.btn{border:1px solid #ddd;border-radius:12px;padding:10px 12px;background:#fff;cursor:pointer;font-weight:800}
     button.btn:hover{background:#f6f6f6}
     textarea{width:100%;min-height:120px;border:1px solid #e7e7e7;border-radius:14px;padding:12px;font-family:inherit}
+
+    /* timeframe + slider */
+    .tfbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+    .tfbtn{border:1px solid #ddd;border-radius:999px;padding:8px 12px;background:#fff;cursor:pointer;font-weight:800}
+    .tfbtn:hover{background:#f6f6f6}
+    .tfbtn.active{border-color:#111}
+    .sliderWrap{margin-top:12px;border-top:1px solid #eee;padding-top:12px}
+    input[type="range"]{width:100%}
+    .sliderMeta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
   </style>
 </head>
 <body>
@@ -50,7 +59,7 @@
       <a href="./index.html">Forside</a>
 
       <div class="drop">
-        <button class="dropbtn" id="dropLabel">Aktier ▾</button>
+        <button class="dropbtn">Aktier ▾</button>
         <div class="menu" id="stocksMenu"></div>
       </div>
 
@@ -80,11 +89,29 @@
     </div>
 
     <div class="card">
-      <h2>Pris (seneste dage)</h2>
+      <h2>Pris (historik)</h2>
       <p class="muted small" style="margin-top:6px;">
         Hold musen over grafen for at se dato og pris (tooltip + crosshair).
       </p>
+
+      <div class="tfbar">
+        <button class="tfbtn" data-tf="1M">1M</button>
+        <button class="tfbtn active" data-tf="3M">3M</button>
+        <button class="tfbtn" data-tf="6M">6M</button>
+        <button class="tfbtn" data-tf="1Y">1Y</button>
+        <button class="tfbtn" data-tf="MAX">MAX</button>
+        <span class="muted small" id="tfInfo">—</span>
+      </div>
+
       <canvas id="priceChart" height="120"></canvas>
+
+      <div class="sliderWrap">
+        <div class="sliderMeta">
+          <div class="muted small"><b>Spol tilbage:</b> vælg hvor vinduet slutter</div>
+          <div class="muted small" id="sliderLabel">—</div>
+        </div>
+        <input id="windowSlider" type="range" min="0" max="0" value="0" step="1" />
+      </div>
     </div>
 
     <div class="card">
@@ -138,7 +165,8 @@
     const DEFAULT_STOCKS = [
       { id: "novo",   name: "Novo Nordisk" },
       { id: "vestas", name: "Vestas" },
-      { id: "dsv",    name: "DSV" }
+      { id: "dsv",    name: "DSV" },
+      { id: "genmab", name: "Genmab" }
     ];
 
     function cleanId(s){ return String(s || "").trim().toLowerCase(); }
@@ -167,7 +195,6 @@
         a.textContent = (s.id === currentId) ? `✓ ${s.name}` : s.name;
         menu.appendChild(a);
       });
-      // link til at tilføje flere
       const sep = document.createElement("div");
       sep.style.height = "1px";
       sep.style.background = "#eee";
@@ -295,6 +322,110 @@
       ].join("\n");
     }
 
+    // --- timeframe + slider logic ---
+    const TF_POINTS = { "1M": 21, "3M": 63, "6M": 126, "1Y": 252, "MAX": 999999 };
+
+    let fullHistory = [];
+    let tf = "3M";
+    let endIndex = 0; // index i fullHistory som vinduet slutter på
+    let chart = null;
+
+    function sliceWindow(){
+      const n = fullHistory.length;
+      if (n === 0) return { labels: [], prices: [], from: 0, to: 0 };
+
+      const maxPoints = TF_POINTS[tf] || 63;
+      const to = clamp(endIndex, 0, n - 1);
+      const from = Math.max(0, to - maxPoints + 1);
+
+      const window = fullHistory.slice(from, to + 1);
+      return {
+        labels: window.map(x => x.date),
+        prices: window.map(x => x.close),
+        from,
+        to
+      };
+    }
+
+    function updateTfButtons(){
+      document.querySelectorAll(".tfbtn").forEach(b => {
+        b.classList.toggle("active", b.getAttribute("data-tf") === tf);
+      });
+    }
+
+    function updateSliderUI(){
+      const slider = document.getElementById("windowSlider");
+      const label = document.getElementById("sliderLabel");
+
+      if (!fullHistory.length){
+        slider.min = 0; slider.max = 0; slider.value = 0;
+        label.textContent = "—";
+        return;
+      }
+
+      slider.min = 0;
+      slider.max = String(fullHistory.length - 1);
+      slider.value = String(endIndex);
+
+      const item = fullHistory[endIndex];
+      label.textContent = item ? `Slutdato: ${item.date} (pris: ${fmt(item.close)} DKK)` : "—";
+    }
+
+    function updateTfInfo(from, to){
+      const el = document.getElementById("tfInfo");
+      if (!fullHistory.length) { el.textContent = "—"; return; }
+      const a = fullHistory[from]?.date || "—";
+      const b = fullHistory[to]?.date || "—";
+      el.textContent = `Viser: ${a} → ${b}`;
+    }
+
+    function renderChart(){
+      const { labels, prices, from, to } = sliceWindow();
+      updateTfInfo(from, to);
+      updateSliderUI();
+
+      const canvas = document.getElementById("priceChart");
+
+      if (!chart){
+        chart = new Chart(canvas, {
+          type: "line",
+          data: { labels, datasets: [{ data: prices, tension: 0.25, pointRadius: 0, pointHoverRadius: 3 }] },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                enabled: true,
+                displayColors: false,
+                callbacks: {
+                  title: (items) => items?.[0]?.label ? `Dato: ${items[0].label}` : "",
+                  label: (item) => `Pris: ${fmt(item.parsed.y)} DKK`
+                }
+              }
+            },
+            interaction: { mode: "index", intersect: false },
+            scales: {
+              x: { ticks: { maxTicksLimit: 6 } },
+              y: { ticks: { maxTicksLimit: 6 } }
+            }
+          },
+          plugins: [crosshairPlugin]
+        });
+        return;
+      }
+
+      chart.data.labels = labels;
+      chart.data.datasets[0].data = prices;
+      chart.update();
+    }
+
+    function setTimeframe(newTf){
+      tf = newTf;
+      updateTfButtons();
+      // hvis user vælger MAX, giv fuld udsigt; ellers behold samme endIndex
+      renderChart();
+    }
+
     window.addEventListener("DOMContentLoaded", () => {
       const stocks = loadStocks();
       const fallback = (stocks[0] && stocks[0].id) ? stocks[0].id : "novo";
@@ -341,34 +472,27 @@
             ul.appendChild(li);
           });
 
-          if (Array.isArray(d.history) && d.history.length > 1) {
-            const labels = d.history.map(x => x.date);
-            const prices = d.history.map(x => x.close);
-            const canvas = document.getElementById("priceChart");
-
-            if (window.__chart) window.__chart.destroy();
-            window.__chart = new Chart(canvas, {
-              type: "line",
-              data: { labels, datasets: [{ data: prices, tension: 0.25, pointRadius: 0, pointHoverRadius: 3 }] },
-              options: {
-                responsive: true,
-                plugins: {
-                  legend: { display: false },
-                  tooltip: {
-                    enabled: true,
-                    displayColors: false,
-                    callbacks: {
-                      title: (items) => items?.[0]?.label ? `Dato: ${items[0].label}` : "",
-                      label: (item) => `Pris: ${fmt(item.parsed.y)} DKK`
-                    }
-                  }
-                },
-                interaction: { mode: "index", intersect: false },
-                scales: { x: { ticks: { maxTicksLimit: 6 } }, y: { ticks: { maxTicksLimit: 6 } } }
-              },
-              plugins: [crosshairPlugin]
-            });
+          // timeframe + slider init
+          fullHistory = Array.isArray(d.history) ? d.history.slice() : [];
+          if (fullHistory.length < 2){
+            document.getElementById("tfInfo").textContent = "Tilføj flere punkter i history[] for timeframe/slider.";
+            return;
           }
+
+          endIndex = fullHistory.length - 1;
+          updateTfButtons();
+
+          document.querySelectorAll(".tfbtn").forEach(b => {
+            b.addEventListener("click", () => setTimeframe(b.getAttribute("data-tf")));
+          });
+
+          const slider = document.getElementById("windowSlider");
+          slider.addEventListener("input", () => {
+            endIndex = Number(slider.value || 0);
+            renderChart();
+          });
+
+          renderChart();
         })
         .catch(err => {
           document.getElementById("asof").textContent =
