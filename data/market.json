@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-02-03T16:51:02+00:00",
+  "updatedAt": "2026-02-03T19:57:25+00:00",
   "fearGreed": {
     "value": null,
     "label": null,
@@ -12,6 +12,8 @@
     "source": "FRED (VIXCLS)"
   },
   "notes": [
+    "Fear&Greed JSON failed: RuntimeError: Could not locate Fear & Greed value in CNN JSON payload",
+    "Fear&Greed fallback failed: RuntimeError: Fallback could not extract Fear & Greed from CNN page",
     "Fear&Greed JSON failed: RuntimeError: Could not locate Fear & Greed value in CNN JSON payload",
     "Fear&Greed fallback failed: RuntimeError: Fallback could not extract Fear & Greed from CNN page"
   ]
