@@ -1,83 +1,124 @@
 import json
-import datetime as dt
-import urllib.request
-from pathlib import Path
+import os
+from datetime import datetime, timezone
+import requests
 
-OUT_PATH = Path("data/market.json")
+ROOT = os.path.dirname(os.path.dirname(__file__))
+OUT_PATH = os.path.join(ROOT, "data", "market.json")
 
-CNN_FNG_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-CBOE_VIX_CSV = "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv"
+# CNN Fear & Greed endpoint (ofte brugt, men kan blokere bots)
+CNN_BASE = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
 
-def http_get_text(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read().decode("utf-8", errors="replace")
+# VIX via FRED (stabil)
+FRED_VIX_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS"
 
-def parse_vix_from_csv(csv_text: str):
-    # CSV header: DATE, OPEN, HIGH, LOW, CLOSE
-    lines = [ln.strip() for ln in csv_text.splitlines() if ln.strip()]
-    # Find last data row (skip header)
-    # Some files may have extra blank lines; we already removed blanks.
-    header = lines[0].lower()
-    if "date" not in header or "close" not in header:
-        raise ValueError("Unexpected VIX CSV header")
+HEADERS = {
+    # CNN blokker ofte uden en "browser"-UA
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+    "Accept": "application/json,text/plain,*/*",
+    "Accept-Language": "en-US,en;q=0.9,da;q=0.8",
+    "Referer": "https://edition.cnn.com/",
+}
 
-    last = lines[-1]
-    parts = [p.strip() for p in last.split(",")]
-    if len(parts) < 5:
-        raise ValueError("Unexpected VIX CSV row format")
+def utc_now_iso():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
-    date_str = parts[0]
-    close_str = parts[4]
-    return date_str, float(close_str)
+def safe_float(x):
+    try:
+        return float(x)
+    except Exception:
+        return None
 
-def parse_fng_from_cnn(json_text: str):
-    data = json.loads(json_text)
+def fetch_json(url, timeout=25):
+    r = requests.get(url, timeout=timeout, headers=HEADERS)
+    r.raise_for_status()
+    return r.json()
 
-    # CNN structure (observed): data["fear_and_greed_historical"]["data"] = [{"x": <ms>, "y": <value>}, ...]
-    hist = data.get("fear_and_greed_historical", {}).get("data", [])
-    if not hist:
-        raise ValueError("CNN F&G: missing historical data")
+def fetch_text(url, timeout=25):
+    r = requests.get(url, timeout=timeout, headers=HEADERS)
+    r.raise_for_status()
+    return r.text
 
-    last = hist[-1]
-    value = float(last["y"])
-    ts_ms = int(last["x"])
-    asof = dt.datetime.utcfromtimestamp(ts_ms / 1000).date().isoformat()
+def find_current_fng_value(payload):
+    # CNN format kan variere → vi søger efter et "now.value"-mønster
+    stack = [payload]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            if "now" in cur and isinstance(cur["now"], dict) and "value" in cur["now"]:
+                v = safe_float(cur["now"]["value"])
+                if v is not None:
+                    return v
+            stack.extend(cur.values())
+        elif isinstance(cur, list):
+            stack.extend(cur)
+    return None
 
-    def label(v: float) -> str:
-        if v < 25: return "Extreme fear"
-        if v < 45: return "Fear"
-        if v <= 55: return "Neutral"
-        if v <= 75: return "Greed"
-        return "Extreme greed"
+def label_fng(v):
+    if v is None:
+        return None
+    if v <= 24: return "Extreme fear"
+    if v <= 44: return "Fear"
+    if v <= 54: return "Neutral"
+    if v <= 74: return "Greed"
+    return "Extreme greed"
 
-    return asof, value, label(value)
-
-def main():
-    # Fetch sources
-    fng_raw = http_get_text(CNN_FNG_URL)
-    vix_raw = http_get_text(CBOE_VIX_CSV)
-
-    fng_date, fng_value, fng_label = parse_fng_from_cnn(fng_raw)
-    vix_date, vix_close = parse_vix_from_csv(vix_raw)
-
-    # Pick latest "as of" among the two
-    asof = max(fng_date, vix_date)
-
-    payload = {
-        "asOf": asof,
-        "fearGreed": round(fng_value, 1),
-        "fearGreedLabel": fng_label,
-        "vixClose": round(vix_close, 2),
-        "vixDate": vix_date,
-        "sources": {
-            "cnnFearGreed": CNN_FNG_URL,
-            "cboeVixCsv": CBOE_VIX_CSV
-        }
+def fetch_fng():
+    today = datetime.now(timezone.utc).date().isoformat()
+    url = f"{CNN_BASE}/{today}"
+    payload = fetch_json(url)
+    v = find_current_fng_value(payload)
+    return {
+        "value": v,
+        "label": label_fng(v),
+        "asOf": today,
+        "source": "CNN (dataviz endpoint)",
     }
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+def fetch_vix_from_fred():
+    csv_text = fetch_text(FRED_VIX_CSV)
+    lines = [ln.strip() for ln in csv_text.splitlines() if ln.strip()]
+    last_date, last_val = None, None
+    for ln in reversed(lines[1:]):  # skip header
+        parts = ln.split(",")
+        if len(parts) >= 2:
+            d, v = parts[0], parts[1]
+            fv = safe_float(v)
+            if fv is not None:
+                last_date, last_val = d, fv
+                break
+    return {
+        "value": last_val,
+        "asOf": last_date,
+        "source": "FRED (VIXCLS)",
+    }
+
+def main():
+    os.makedirs(os.path.join(ROOT, "data"), exist_ok=True)
+
+    out = {
+        "updatedAt": utc_now_iso(),
+        "fearGreed": None,
+        "vix": None,
+        "notes": [],
+    }
+
+    # Fear & Greed (må ikke crashe build)
+    try:
+        out["fearGreed"] = fetch_fng()
+    except Exception as e:
+        # Her fanger vi 418 og alt andet – og skriver det i notes.
+        out["notes"].append(f"Fear&Greed failed: {type(e).__name__}: {e}")
+
+    # VIX (stabilt)
+    try:
+        out["vix"] = fetch_vix_from_fred()
+    except Exception as e:
+        out["notes"].append(f"VIX failed: {type(e).__name__}: {e}")
+
+    with open(OUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, indent=2)
+
     print(f"Wrote {OUT_PATH}")
 
 if __name__ == "__main__":
