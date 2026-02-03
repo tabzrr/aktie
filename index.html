@@ -19,13 +19,21 @@
     .card{border:1px solid var(--border);border-radius:16px;padding:16px;margin:14px 0;background:#fff}
     .muted{color:var(--muted)}
     .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+
     .stockCard{border:1px solid #eee;border-radius:16px;padding:14px}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     button.btn{border:1px solid #ddd;border-radius:12px;padding:10px 12px;background:#fff;cursor:pointer;font-weight:800}
     button.btn:hover{background:#f6f6f6}
     button.danger{border-color:#ffb3b3;color:#b10000}
-    input{border:1px solid #e7e7e7;border-radius:12px;padding:10px 12px;font:inherit;width:100%}
+
+    input, select{
+      border:1px solid #e7e7e7;border-radius:12px;padding:10px 12px;font:inherit;width:100%;
+      background:#fff;
+    }
     label{font-size:12px;color:var(--muted)}
+    code{background:#f7f7f7;padding:2px 6px;border-radius:8px}
+
     .drop{position:relative;display:inline-block}
     .dropbtn{border:0;background:transparent;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;font:inherit}
     .dropbtn:hover{background:#f4f4f4}
@@ -33,6 +41,11 @@
     .menu a{display:block;padding:10px 10px;border-radius:10px}
     .menu a:hover{background:#f4f4f4}
     .drop:hover .menu{display:block}
+
+    .mini{font-size:12px;color:var(--muted)}
+    .kpis{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .kpi{border:1px solid #eee;border-radius:999px;padding:6px 10px;font-size:13px;background:#fafafa}
+    .kpi b{color:#111}
   </style>
 </head>
 <body>
@@ -58,10 +71,34 @@
     <h1>Markedsoversigt (MVP)</h1>
     <p class="muted">Klikbar prototype. Ikke real-time data. Formål: brugervenlig “market-state + aktie-overblik”.</p>
 
-    <div class="card">
+    <div class="card" id="aktier">
       <h2>Aktier</h2>
-      <p class="muted">Listen kommer fra <code>data/stocks.json</code>. (Du kan stadig tilføje lokalt herunder, men masterlisten er filen.)</p>
+      <p class="muted">Listen kommer fra <code>data/stocks.json</code>. Du kan søge og sortere herunder.</p>
 
+      <!-- Controls -->
+      <div class="card" style="background:#fafafa">
+        <div class="grid2">
+          <div>
+            <label>Søg (navn eller id)</label>
+            <input id="searchInput" placeholder="fx novo, genmab, mærsk, carlsberg…" />
+          </div>
+          <div>
+            <label>Sortering</label>
+            <select id="sortSelect">
+              <option value="name_asc">A–Å (navn)</option>
+              <option value="score_desc">Højeste score</option>
+              <option value="score_asc">Laveste score</option>
+              <option value="vol_desc">Mest volatilitet</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <span class="mini" id="statusLine">Indlæser aktier…</span>
+        </div>
+      </div>
+
+      <!-- Local add (optional) -->
       <div class="card" style="background:#fafafa">
         <h3>Tilføj aktie (lokalt i din browser)</h3>
         <div class="grid2">
@@ -103,24 +140,25 @@
   <script>
     // --- settings ---
     const LS_KEY = "stocks_v1";
+    const SORT_KEY = "sort_v1";
     const STOCKS_FILE = "./data/stocks.json?v=" + Date.now();
 
     const updatedPill = document.getElementById("updatedPill");
     updatedPill.textContent = "Sidst opdateret: " + new Date().toISOString().slice(0,19).replace("T"," ");
 
-    function cleanId(s){ return String(s||"").trim().toLowerCase(); }
+    function cleanId(s){ return String(s || "").trim().toLowerCase(); }
     function isValidId(id){ return /^[a-z0-9_-]+$/.test(id); }
 
     function loadLocalStocks(){
-      try{
+      try {
         const raw = localStorage.getItem(LS_KEY);
-        if(!raw) return [];
+        if (!raw) return [];
         const parsed = JSON.parse(raw);
-        if(!Array.isArray(parsed)) return [];
+        if (!Array.isArray(parsed)) return [];
         return parsed
-          .map(x => ({ id: cleanId(x.id), name: String(x.name||"").trim() || cleanId(x.id) }))
+          .map(x => ({ id: cleanId(x.id), name: String(x.name || "").trim() || cleanId(x.id) }))
           .filter(x => x.id && isValidId(x.id));
-      }catch{ return []; }
+      } catch { return []; }
     }
 
     function saveLocalStocks(list){
@@ -172,16 +210,164 @@
       menu.appendChild(hint);
     }
 
+    // --- scoring (same spirit as stock page) ---
+    function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+
+    function computeScoreFromData(d){
+      // Robust demo-score: if missing/zero, fallback to 50
+      const close = (typeof d.close === "number") ? d.close : null;
+      const ma20  = (typeof d.ma20 === "number") ? d.ma20 : null;
+      const ma50  = (typeof d.ma50 === "number") ? d.ma50 : null;
+      const ma200 = (typeof d.ma200 === "number") ? d.ma200 : null;
+      const vol20 = (typeof d.vol20 === "number") ? d.vol20 : null;
+
+      if(!close || close === 0 || !ma50 || !ma200) return 50;
+
+      let trendScore = 50;
+      if (close > ma50) trendScore += 15; else trendScore -= 15;
+      if (close > ma200) trendScore += 20; else trendScore -= 20;
+      trendScore = clamp(trendScore, 0, 100);
+
+      let heatScore = 60;
+      if (ma50 && ma50 !== 0){
+        const dist = (close - ma50) / ma50;
+        heatScore = 70 - (Math.abs(dist) * 800);
+      }
+      heatScore = clamp(heatScore, 0, 100);
+
+      let riskScore = 70;
+      if (vol20 !== null){
+        riskScore = 80 - (vol20 * 10);
+      }
+      riskScore = clamp(riskScore, 0, 100);
+
+      const score = Math.round((trendScore * 0.5) + (heatScore * 0.3) + (riskScore * 0.2));
+      return clamp(score, 0, 100);
+    }
+
+    // --- data cache for cards ---
+    const metricsById = new Map(); // id -> {score, close, chg, vol, asOf, ok}
+    let allStocks = [];            // merged master + local
+    let visibleStocks = [];        // filtered + sorted
+
+    async function fetchMetricsForStock(id){
+      const url = `./data/${encodeURIComponent(id)}.json?v=` + Date.now();
+      try{
+        const r = await fetch(url);
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        const d = await r.json();
+
+        const score = computeScoreFromData(d);
+        const close = (typeof d.close === "number") ? d.close : null;
+        const chg   = (typeof d.changePct === "number") ? d.changePct : null;
+        const vol   = (typeof d.vol20 === "number") ? d.vol20 : null;
+        const asOf  = d.asOf || "—";
+
+        metricsById.set(id, { ok:true, score, close, chg, vol, asOf });
+      }catch(e){
+        metricsById.set(id, { ok:false, score:null, close:null, chg:null, vol:null, asOf:"—" });
+      }
+    }
+
+    async function primeMetrics(stocks){
+      const statusLine = document.getElementById("statusLine");
+      statusLine.textContent = `Henter data for ${stocks.length} aktier…`;
+
+      // Fetch sequentially (mildt) for at undgå spam/limits
+      for(let i=0;i<stocks.length;i++){
+        const id = stocks[i].id;
+        if(!metricsById.has(id)){
+          await fetchMetricsForStock(id);
+          // re-render løbende så du kan se tingene komme ind
+          applyFilterSortAndRender();
+        }
+        statusLine.textContent = `Henter data… (${i+1}/${stocks.length})`;
+      }
+
+      statusLine.textContent = "Klar ✅ (søg/sortér som du vil)";
+    }
+
+    // --- filter + sort ---
+    function getSort(){
+      return localStorage.getItem(SORT_KEY) || "name_asc";
+    }
+    function setSort(v){
+      localStorage.setItem(SORT_KEY, v);
+    }
+
+    function applyFilterSortAndRender(){
+      const q = String(document.getElementById("searchInput").value || "").trim().toLowerCase();
+      const sort = String(document.getElementById("sortSelect").value || "name_asc");
+
+      visibleStocks = allStocks.filter(s => {
+        if(!q) return true;
+        return (s.name || "").toLowerCase().includes(q) || (s.id || "").toLowerCase().includes(q);
+      });
+
+      visibleStocks.sort((a,b) => {
+        const ma = metricsById.get(a.id);
+        const mb = metricsById.get(b.id);
+
+        const scoreA = (ma && ma.ok && typeof ma.score === "number") ? ma.score : null;
+        const scoreB = (mb && mb.ok && typeof mb.score === "number") ? mb.score : null;
+        const volA   = (ma && ma.ok && typeof ma.vol === "number") ? ma.vol : null;
+        const volB   = (mb && mb.ok && typeof mb.vol === "number") ? mb.vol : null;
+
+        if(sort === "score_desc"){
+          if(scoreA === null && scoreB === null) return (a.name||"").localeCompare(b.name||"");
+          if(scoreA === null) return 1;
+          if(scoreB === null) return -1;
+          return scoreB - scoreA;
+        }
+        if(sort === "score_asc"){
+          if(scoreA === null && scoreB === null) return (a.name||"").localeCompare(b.name||"");
+          if(scoreA === null) return 1;
+          if(scoreB === null) return -1;
+          return scoreA - scoreB;
+        }
+        if(sort === "vol_desc"){
+          if(volA === null && volB === null) return (a.name||"").localeCompare(b.name||"");
+          if(volA === null) return 1;
+          if(volB === null) return -1;
+          return volB - volA;
+        }
+        // name_asc default
+        return (a.name||"").localeCompare(b.name||"", "da");
+      });
+
+      renderCards(visibleStocks);
+    }
+
+    // --- render cards ---
+    function fmt(n, digits=1){ return (typeof n === "number" && isFinite(n)) ? n.toFixed(digits) : "—"; }
     function renderCards(stocks){
       const wrap = document.getElementById("cards");
       wrap.innerHTML = "";
+
       stocks.forEach(s => {
+        const m = metricsById.get(s.id);
+
+        const score = (m && m.ok && typeof m.score === "number") ? m.score : "—";
+        const close = (m && m.ok && typeof m.close === "number") ? fmt(m.close, (m.close >= 1000 ? 0 : 1)) : "—";
+        const chg   = (m && m.ok && typeof m.chg === "number") ? (fmt(m.chg, 1) + "%") : "—";
+        const vol   = (m && m.ok && typeof m.vol === "number") ? (fmt(m.vol, 1) + "%") : "—";
+        const asOf  = (m && m.ok) ? (m.asOf || "—") : "—";
+        const okTxt = (m && m.ok) ? "" : `<span class="mini">⚠️ Mangler data/${s.id}.json</span>`;
+
         const div = document.createElement("div");
         div.className = "stockCard";
         div.innerHTML = `
           <div style="font-weight:900">${s.name}</div>
           <div class="muted" style="font-size:13px;margin-top:4px;">Åbner <code>./stock.html?t=${s.id}</code></div>
-          <div class="row" style="margin-top:10px;">
+          ${okTxt}
+          <div class="kpis">
+            <span class="kpi">Score: <b>${score}</b></span>
+            <span class="kpi">Close: <b>${close}</b></span>
+            <span class="kpi">Chg: <b>${chg}</b></span>
+            <span class="kpi">Vol20: <b>${vol}</b></span>
+            <span class="kpi">AsOf: <b>${asOf}</b></span>
+          </div>
+          <div class="row" style="margin-top:12px;">
             <a class="btn" href="./stock.html?t=${encodeURIComponent(s.id)}" style="display:inline-block">Åbn</a>
             <button class="btn danger" data-remove="${s.id}">Fjern (lokalt)</button>
           </div>
@@ -199,6 +385,7 @@
       });
     }
 
+    // --- market state (unchanged demo) ---
     function setState(x){
       const state = document.getElementById("statePill");
       const conf = document.getElementById("confPill");
@@ -208,14 +395,35 @@
     }
     window.setState = setState;
 
+    // --- boot ---
     async function boot(){
       const master = await loadMasterStocks();     // global
       const local = loadLocalStocks();             // kun din browser
-      const merged = uniqById([...master, ...local]);
+      allStocks = uniqById([...master, ...local]);
 
-      renderMenu(merged);
-      renderCards(merged);
+      renderMenu(allStocks);
+
+      // init sort select from localStorage
+      const sortSelect = document.getElementById("sortSelect");
+      sortSelect.value = getSort();
+
+      // Render quickly (before metrics)
+      applyFilterSortAndRender();
+
+      // Prime metrics (and re-render while loading)
+      await primeMetrics(allStocks);
+      applyFilterSortAndRender();
     }
+
+    // --- events ---
+    document.getElementById("searchInput").addEventListener("input", () => {
+      applyFilterSortAndRender();
+    });
+
+    document.getElementById("sortSelect").addEventListener("change", (e) => {
+      setSort(e.target.value);
+      applyFilterSortAndRender();
+    });
 
     // add local stock
     document.getElementById("addBtn").addEventListener("click", () => {
