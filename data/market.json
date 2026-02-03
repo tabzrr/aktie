@@ -1,0 +1,15 @@
+{
+  "updatedAt": "2026-02-03T16:02:49+00:00",
+  "fearGreed": {
+    "value": null,
+    "label": null,
+    "asOf": "2026-02-03",
+    "source": "CNN (dataviz endpoint)"
+  },
+  "vix": {
+    "value": 16.34,
+    "asOf": "2026-02-02",
+    "source": "FRED (VIXCLS)"
+  },
+  "notes": []
+}
