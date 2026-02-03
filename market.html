@@ -421,3 +421,32 @@
   </script>
 </body>
 </html>
+async function loadMarketAuto() {
+  try {
+    const v = Date.now(); // cache-bust
+    const res = await fetch(`./data/market.json?v=${v}`, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const m = await res.json();
+    return m;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function initMarket() {
+  const auto = await loadMarketAuto();
+  if (auto) {
+    // TODO: her sætter du UI-felterne ud fra auto-data:
+    // fx setPill("vix", auto.vix.value)
+    // fx setPill("fng", auto.fng.value)
+    // og skriv “Sidst opdateret” = auto.asof
+    renderMarket(auto); // brug din egen render-funktion, hvis du har en
+    return;
+  }
+
+  // fallback: brug localStorage / dine inputs (det du har nu)
+  loadFromLocalStorageOrBlank();
+}
+
+initMarket();
+
