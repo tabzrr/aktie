@@ -3,7 +3,7 @@ name: Update market data
 on:
   workflow_dispatch:
   schedule:
-    - cron: "15 18 * * 1-5" # ca. 19:15 DK-tid vinter (UTC 18:15)
+    - cron: "15 18 * * 1-5" # ca. 19:15 DK-tid i vinter (UTC 18:15)
 
 permissions:
   contents: write
