@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marked (manual)</title>
+  <style>
+    :root { --border:#e7e7e7; --text:#111; --muted:#666; --bg:#fff; }
+    body{font-family:system-ui,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
+    .nav{position:sticky;top:0;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--border);z-index:10}
+    .nav-inner{max-width:980px;margin:0 auto;padding:10px 18px;display:flex;gap:12px;align-items:center}
+    .brand{font-weight:800}
+    a{text-decoration:none;color:var(--text);padding:8px 10px;border-radius:10px}
+    a:hover{background:#f4f4f4}
+    .spacer{flex:1}
+    .pill{display:inline-block;border:1px solid #ddd;border-radius:999px;padding:6px 10px;font-size:13px;color:var(--muted);background:#fff}
+
+    .drop{position:relative;display:inline-block}
+    .dropbtn{border:0;background:transparent;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;font:inherit}
+    .dropbtn:hover{background:#f4f4f4}
+    .menu{display:none;position:absolute;top:40px;left:0;min-width:240px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:6px;z-index:20}
+    .menu a{display:block;padding:10px 10px;border-radius:10px}
+    .menu a:hover{background:#f4f4f4}
+    .drop:hover .menu{display:block}
+
+    .wrap{max-width:980px;margin:0 auto;padding:18px}
+    .card{border:1px solid var(--border);border-radius:16px;padding:16px;margin:14px 0;background:#fff}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    label{font-size:12px;color:var(--muted)}
+    input, textarea{
+      border:1px solid #e7e7e7;border-radius:12px;padding:10px 12px;font:inherit;width:100%;
+      background:#fff;
+    }
+    textarea{min-height:160px}
+    button.btn{border:1px solid #ddd;border-radius:12px;padding:10px 12px;background:#fff;cursor:pointer;font-weight:800}
+    button.btn:hover{background:#f6f6f6}
+    .kpis{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .kpi{border:1px solid #eee;border-radius:999px;padding:6px 10px;font-size:13px;background:#fafafa}
+    .kpi b{color:#111}
+    table{width:100%;border-collapse:separate;border-spacing:0;margin-top:10px;border:1px solid #eee;border-radius:14px;overflow:hidden}
+    th,td{padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;text-align:left}
+    th{background:#fafafa}
+    tr:last-child td{border-bottom:0}
+    code{background:#f7f7f7;padding:2px 6px;border-radius:8px}
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div class="nav-inner">
+      <div class="brand">Aktie-MVP</div>
+      <a href="./index.html">Forside</a>
+
+      <div class="drop">
+        <button class="dropbtn">Aktier ▾</button>
+        <div class="menu" id="stocksMenu"></div>
+      </div>
+
+      <a href="./market.html">Marked</a>
+      <a href="./laering.html">Læring</a>
+      <a href="./om.html">Om</a>
+
+      <div class="spacer"></div>
+      <span class="pill" id="updatedPill">Sidst opdateret: —</span>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h1>Marked (manual)</h1>
+    <p class="muted">
+      Her taster du 2 tal ind (VIX + Fear &amp; Greed). Siden oversætter det til en simpel markedsstemning.
+      Formålet er at give kontekst til dine aktie-scorer.
+    </p>
+
+    <div class="card">
+      <h2>Markedsstemning</h2>
+
+      <div class="row">
+        <span class="pill" id="statePill">Stemning: —</span>
+        <span class="pill" id="vixPill">VIX: —</span>
+        <span class="pill" id="fgPill">Fear &amp; Greed: —</span>
+        <span class="pill" id="asofPill">Dato: —</span>
+      </div>
+
+      <p class="muted" id="explain" style="margin-top:10px;">—</p>
+
+      <div class="card" style="background:#fafafa">
+        <h3>Indtast data</h3>
+        <div class="grid2">
+          <div>
+            <label>VIX (tal)</label>
+            <input id="vixInput" inputmode="decimal" placeholder="fx 14.8" />
+          </div>
+          <div>
+            <label>Fear &amp; Greed (0–100)</label>
+            <input id="fgInput" inputmode="numeric" placeholder="fx 62" />
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-top:12px;">
+          <div>
+            <label>Dato (valgfri)</label>
+            <input id="dateInput" placeholder="fx 2026-02-03" />
+          </div>
+          <div>
+            <label>Noter (valgfri)</label>
+            <input id="noteInput" placeholder="fx 'Regnskabsuge / høj uro' " />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <button class="btn" id="saveBtn">Gem</button>
+          <button class="btn" id="resetBtn">Nulstil</button>
+          <span class="muted" id="saveMsg"></span>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <span class="kpi">Vol-label: <b id="volLabel">—</b></span>
+        <span class="kpi">Sentiment: <b id="sentLabel">—</b></span>
+        <span class="kpi">Konklusion: <b id="finalLabel">—</b></span>
+      </div>
+
+      <p class="muted" style="margin-top:10px;font-size:13px;">
+        *Det her er ikke rådgivning. Det er en måde at sætte “markedskontekst” på dine indikatorer.*
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Hvordan har markedet typisk reageret før?</h2>
+      <p class="muted">
+        Start simpelt: udfyld dine egne “typiske” tal her (baseret på det du lærer/undersøger).
+        Senere kan vi automatisere det, så tabellen bliver data-drevet.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Stemning</th>
+            <th>1 uge</th>
+            <th>1 måned</th>
+            <th>3 måneder</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody id="histTable"></tbody>
+      </table>
+
+      <div class="card" style="background:#fafafa;margin-top:12px;">
+        <h3>Redigér “historik” (manual)</h3>
+        <p class="muted" style="font-size:13px;margin-top:6px;">
+          Her kan du skrive dine egne værdier. Format er JSON. Du kan fx sætte “avgReturnPct” for 1w/1m/3m og “winRatePct”.
+        </p>
+        <textarea id="histJson"></textarea>
+        <div class="row" style="margin-top:12px;">
+          <button class="btn" id="saveHistBtn">Gem historik</button>
+          <span class="muted" id="histMsg"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- menu from stocks.json (same as other pages) ----------
+    async function loadMenu(){
+      const STOCKS_FILE = "./data/stocks.json?v=" + Date.now();
+      try{
+        const r = await fetch(STOCKS_FILE);
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        const list = await r.json();
+        const menu = document.getElementById("stocksMenu");
+        menu.innerHTML = "";
+        (Array.isArray(list) ? list : []).forEach(s => {
+          const id = String(s.id||"").toLowerCase();
+          const a = document.createElement("a");
+          a.href = `./stock.html?t=${encodeURIComponent(id)}`;
+          a.textContent = s.name || id;
+          menu.appendChild(a);
+        });
+        const sep = document.createElement("div");
+        sep.style.height="1px"; sep.style.background="#eee"; sep.style.margin="6px";
+        menu.appendChild(sep);
+        const back = document.createElement("a");
+        back.href = "./index.html#aktier";
+        back.textContent = "Tilbage til oversigt…";
+        menu.appendChild(back);
+      }catch(e){
+        console.warn("Menu kunne ikke indlæses:", e);
+      }
+    }
+
+    // ---------- storage ----------
+    const LS_MARKET = "market_manual_v1";
+    const LS_HIST = "market_hist_v1";
+
+    function clamp(x,a,b){ return Math.max(a, Math.min(b, x)); }
+    function fmt(n, d=1){ return (typeof n==="number" && isFinite(n)) ? n.toFixed(d) : "—"; }
+
+    function nowDateISO(){
+      const d = new Date();
+      return d.toISOString().slice(0,10);
+    }
+
+    // ---------- labels (Option A) ----------
+    function volBucket(vix){
+      if(!(typeof vix==="number" && isFinite(vix))) return { label:"—", detail:"Manglende VIX" };
+      if(vix < 15)  return { label:"Roligt marked", detail:"Lav volatilitet" };
+      if(vix < 25)  return { label:"Uroligt marked", detail:"Forhøjet volatilitet" };
+      return { label:"Ekstrem uro", detail:"Høj volatilitet / stress" };
+    }
+
+    function sentimentBucket(fg){
+      if(!(typeof fg==="number" && isFinite(fg))) return { label:"—", detail:"Manglende Fear & Greed" };
+      if(fg <= 25) return { label:"Frygt", detail:"Lavt sentiment" };
+      if(fg < 45)  return { label:"Let frygt", detail:"Forsigtigt sentiment" };
+      if(fg <= 55) return { label:"Neutral", detail:"Blandet sentiment" };
+      if(fg < 75)  return { label:"Grådighed", detail:"Optimistisk sentiment" };
+      return { label:"Ekstrem grådighed", detail:"Meget optimisme / overophedning" };
+    }
+
+    function finalState(vix, fg){
+      const vb = volBucket(vix);
+      const sb = sentimentBucket(fg);
+
+      // Base = volatilitet (stærkeste signal i en simpel MVP)
+      let final = vb.label;
+
+      // Overophedet overrides kun hvis vol ikke er “Ekstrem uro”
+      if(typeof fg==="number" && fg >= 80 && vb.label !== "Ekstrem uro"){
+        final = "Overophedet";
+      }
+
+      // Hvis “Ekstrem uro” + ekstrem frygt → stadig ekstrem uro, men forklar det
+      return { final, vb, sb };
+    }
+
+    function explanationText(final, vb, sb, note){
+      const n = (note || "").trim();
+      if(final === "Roligt marked"){
+        return `Markedet er roligt: lav volatilitet. Typisk er udsving mindre, og trends kan “holde længere”. ` +
+               `Sentiment: ${sb.label}. ` + (n ? `Note: ${n}` : "");
+      }
+      if(final === "Uroligt marked"){
+        return `Markedet er uroligt: forhøjet volatilitet. Typisk større udsving og flere “fake moves”. ` +
+               `Sentiment: ${sb.label}. ` + (n ? `Note: ${n}` : "");
+      }
+      if(final === "Ekstrem uro"){
+        return `Markedet er i ekstrem uro: høj volatilitet/stress. Typisk store udsving, hurtige bevægelser og højere risiko. ` +
+               `Sentiment: ${sb.label}. ` + (n ? `Note: ${n}` : "");
+      }
+      if(final === "Overophedet"){
+        return `Markedet ser overophedet ud: meget optimisme uden at volatiliteten er ekstrem. ` +
+               `Historisk kan det give perioder med stærk trend, men også risiko for pullback. ` +
+               (n ? `Note: ${n}` : "");
+      }
+      return `Volatilitet: ${vb.detail}. Sentiment: ${sb.detail}. ` + (n ? `Note: ${n}` : "");
+    }
+
+    // ---------- history (manual JSON) ----------
+    const DEFAULT_HIST = {
+      "Roligt marked": {
+        "1w": { "avgReturnPct": null, "winRatePct": null },
+        "1m": { "avgReturnPct": null, "winRatePct": null },
+        "3m": { "avgReturnPct": null, "winRatePct": null },
+        "note": "Udfyld når du har undersøgt"
+      },
+      "Uroligt marked": {
+        "1w": { "avgReturnPct": null, "winRatePct": null },
+        "1m": { "avgReturnPct": null, "winRatePct": null },
+        "3m": { "avgReturnPct": null, "winRatePct": null },
+        "note": "Udfyld når du har undersøgt"
+      },
+      "Ekstrem uro": {
+        "1w": { "avgReturnPct": null, "winRatePct": null },
+        "1m": { "avgReturnPct": null, "winRatePct": null },
+        "3m": { "avgReturnPct": null, "winRatePct": null },
+        "note": "Udfyld når du har undersøgt"
+      },
+      "Overophedet": {
+        "1w": { "avgReturnPct": null, "winRatePct": null },
+        "1m": { "avgReturnPct": null, "winRatePct": null },
+        "3m": { "avgReturnPct": null, "winRatePct": null },
+        "note": "Udfyld når du har undersøgt"
+      }
+    };
+
+    function loadHist(){
+      try{
+        const raw = localStorage.getItem(LS_HIST);
+        if(!raw) return DEFAULT_HIST;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : DEFAULT_HIST;
+      }catch{ return DEFAULT_HIST; }
+    }
+
+    function renderHistTable(hist){
+      const tb = document.getElementById("histTable");
+      tb.innerHTML = "";
+      const order = ["Roligt marked","Uroligt marked","Ekstrem uro","Overophedet"];
+      order.forEach(key => {
+        const row = hist[key] || {};
+        const c1w = row["1w"] || {};
+        const c1m = row["1m"] || {};
+        const c3m = row["3m"] || {};
+        const note = row.note || "—";
+
+        function cell(v){
+          if(v === null || typeof v === "undefined") return "—";
+          if(typeof v === "number") return v.toFixed(1) + "%";
+          return String(v);
+        }
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><b>${key}</b></td>
+          <td>${cell(c1w.avgReturnPct)} / ${cell(c1w.winRatePct)} win</td>
+          <td>${cell(c1m.avgReturnPct)} / ${cell(c1m.winRatePct)} win</td>
+          <td>${cell(c3m.avgReturnPct)} / ${cell(c3m.winRatePct)} win</td>
+          <td class="muted">${note}</td>
+        `;
+        tb.appendChild(tr);
+      });
+    }
+
+    // ---------- UI wiring ----------
+    function loadMarket(){
+      const saved = (() => {
+        try{ return JSON.parse(localStorage.getItem(LS_MARKET) || "null"); }catch{ return null; }
+      })();
+
+      const vix = saved && typeof saved.vix === "number" ? saved.vix : null;
+      const fg  = saved && typeof saved.fg === "number" ? saved.fg : null;
+      const date = (saved && saved.date) ? saved.date : nowDateISO();
+      const note = (saved && saved.note) ? saved.note : "";
+
+      document.getElementById("vixInput").value = (vix !== null ? String(vix) : "");
+      document.getElementById("fgInput").value  = (fg !== null ? String(fg) : "");
+      document.getElementById("dateInput").value = date;
+      document.getElementById("noteInput").value = note;
+
+      applyMarket(vix, fg, date, note);
+    }
+
+    function applyMarket(vix, fg, date, note){
+      const { final, vb, sb } = finalState(vix, fg);
+
+      document.getElementById("statePill").textContent = "Stemning: " + final;
+      document.getElementById("vixPill").textContent   = "VIX: " + (vix !== null ? fmt(vix,1) : "—");
+      document.getElementById("fgPill").textContent    = "Fear & Greed: " + (fg !== null ? fmt(fg,0) : "—");
+      document.getElementById("asofPill").textContent  = "Dato: " + (date || "—");
+
+      document.getElementById("volLabel").textContent  = vb.label;
+      document.getElementById("sentLabel").textContent = sb.label;
+      document.getElementById("finalLabel").textContent = final;
+
+      document.getElementById("explain").textContent = explanationText(final, vb, sb, note);
+    }
+
+    document.getElementById("saveBtn").addEventListener("click", () => {
+      const vixRaw = document.getElementById("vixInput").value.trim().replace(",",".");
+      const fgRaw  = document.getElementById("fgInput").value.trim().replace(",",".");
+      const date   = document.getElementById("dateInput").value.trim() || nowDateISO();
+      const note   = document.getElementById("noteInput").value.trim();
+
+      const vix = vixRaw ? Number(vixRaw) : null;
+      const fg  = fgRaw ? Number(fgRaw) : null;
+
+      if(vix !== null && (!isFinite(vix) || vix < 0 || vix > 200)){
+        document.getElementById("saveMsg").textContent = "VIX ser forkert ud. Skriv et tal (fx 14.8).";
+        return;
+      }
+      if(fg !== null && (!isFinite(fg) || fg < 0 || fg > 100)){
+        document.getElementById("saveMsg").textContent = "Fear & Greed skal være 0–100.";
+        return;
+      }
+
+      localStorage.setItem(LS_MARKET, JSON.stringify({ vix, fg, date, note }));
+      document.getElementById("saveMsg").textContent = "Gemt ✅";
+      applyMarket(vix, fg, date, note);
+      setTimeout(()=> document.getElementById("saveMsg").textContent="", 2000);
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      localStorage.removeItem(LS_MARKET);
+      document.getElementById("saveMsg").textContent = "Nulstil ✅";
+      loadMarket();
+      setTimeout(()=> document.getElementById("saveMsg").textContent="", 2000);
+    });
+
+    // history editor
+    const histBox = document.getElementById("histJson");
+    const histMsg = document.getElementById("histMsg");
+
+    function loadAndRenderHist(){
+      const hist = loadHist();
+      renderHistTable(hist);
+      histBox.value = JSON.stringify(hist, null, 2);
+    }
+
+    document.getElementById("saveHistBtn").addEventListener("click", () => {
+      try{
+        const parsed = JSON.parse(histBox.value);
+        if(!parsed || typeof parsed !== "object") throw new Error("Ugyldig JSON");
+        localStorage.setItem(LS_HIST, JSON.stringify(parsed));
+        histMsg.textContent = "Gemt ✅";
+        renderHistTable(parsed);
+        setTimeout(()=> histMsg.textContent="", 2000);
+      }catch(e){
+        histMsg.textContent = "Kunne ikke gemme: tjek JSON-format.";
+      }
+    });
+
+    // boot
+    document.getElementById("updatedPill").textContent =
+      "Sidst opdateret: " + new Date().toISOString().slice(0,19).replace("T"," ");
+
+    loadMenu();
+    loadMarket();
+    loadAndRenderHist();
+  </script>
+</body>
+</html>
