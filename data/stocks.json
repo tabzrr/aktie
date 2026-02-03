@@ -4,4 +4,9 @@
   { "id": "dsv", "name": "DSV" },
   { "id": "genmab", "name": "Genmab" },
   { "id": "coloplast", "name": "Coloplast B" }
+  ,{ "id": "maersk", "name": "A.P. Møller - Mærsk B" }
+  ,{ "id": "pandora", "name": "Pandora" }
+  ,{ "id": "carlsberg", "name": "Carlsberg B" }
+  ,{ "id": "fls", "name": "FLSmidth" }
+  ,{ "id": "iss", "name": "ISS" }
 ]
