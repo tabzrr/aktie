@@ -1,0 +1,31 @@
+name: Update market data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 18 * * 1-5"  # ca. 19:15 DK-tid i vinter (UTC 18:15)
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run updater
+        run: python scripts/update_market.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add data/market.json
+          git diff --staged --quiet || (git commit -m "Update market.json" && git push)
