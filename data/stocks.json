@@ -1,0 +1,7 @@
+[
+  { "id": "novo", "name": "Novo Nordisk" },
+  { "id": "vestas", "name": "Vestas" },
+  { "id": "dsv", "name": "DSV" },
+  { "id": "genmab", "name": "Genmab" },
+  { "id": "coloplast", "name": "Coloplast B" }
+]
