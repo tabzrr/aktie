@@ -14,10 +14,13 @@ FRED_VIX_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS"
 
 HEADERS = {
     # CNN blokker ofte uden en "browser"-UA
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-    "Accept": "application/json,text/plain,*/*",
-    "Accept-Language": "en-US,en;q=0.9,da;q=0.8",
-    "Referer": "https://edition.cnn.com/",
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  "Accept": "application/json,text/plain,*/*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Referer": "https://edition.cnn.com/markets/fear-and-greed",
+  "Connection": "keep-alive",
+}
+
 }
 
 def utc_now_iso():
