@@ -3,8 +3,7 @@ name: Update market data
 on:
   workflow_dispatch:
   schedule:
-    # Kører hverdage ca. 19:15 DK-tid i vinter (UTC 18:15)
-    - cron: "15 18 * * 1-5"
+    - cron: "15 18 * * 1-5" # ca. 19:15 DK-tid vinter (UTC 18:15)
 
 permissions:
   contents: write
@@ -22,9 +21,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
+        run: pip install requests
 
       - name: Run updater
         run: python scripts/update_market.py
