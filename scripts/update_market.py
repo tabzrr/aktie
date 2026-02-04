@@ -1,28 +1,27 @@
 import json
 import re
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
+
 import requests
 
 MARKET_PATH = Path("data/market.json")
 
-# CNN Fear & Greed (kan blokere bots)
-CNN_FNG_JSON_TODAY = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata/{date}"
-CNN_FNG_PAGE = "https://edition.cnn.com/markets/fear-and-greed"
+# CNN endpoints (kan være ustabile / ændrer format)
+CNN_GRAPH_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+CNN_PAGE_URL = "https://edition.cnn.com/markets/fear-and-greed"
 
-# VIX fra FRED (CSV)
+# VIX (stabil) via FRED CSV
 FRED_VIX_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=VIXCLS"
 
-# Browser-agtige headers (hjælper nogle gange mod 418)
 HEADERS = {
+    # Ligner en normal browser. (Helbred: CNN kan stadig blokere, men vi prøver.)
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "da,en-US;q=0.8,en;q=0.6",
+    "Accept": "text/html,application/json,text/plain,*/*",
+    "Accept-Language": "da-DK,da;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": "https://edition.cnn.com/",
     "Connection": "keep-alive",
-    "Referer": "https://edition.cnn.com/markets/fear-and-greed",
 }
-
-TIMEOUT = 25
 
 
 def utc_now_iso():
@@ -31,9 +30,38 @@ def utc_now_iso():
 
 def safe_float(x):
     try:
-        return float(x)
+        if x is None:
+            return None
+        if isinstance(x, (int, float)):
+            return float(x)
+        s = str(x).strip()
+        if s == "" or s.lower() == "null":
+            return None
+        return float(s)
     except Exception:
         return None
+
+
+def safe_int_0_100(x):
+    v = safe_float(x)
+    if v is None:
+        return None
+    v = int(round(v))
+    if 0 <= v <= 100:
+        return v
+    return None
+
+
+def fetch_json(url, timeout=25):
+    r = requests.get(url, timeout=timeout, headers=HEADERS)
+    r.raise_for_status()
+    return r.json()
+
+
+def fetch_text(url, timeout=25):
+    r = requests.get(url, timeout=timeout, headers=HEADERS)
+    r.raise_for_status()
+    return r.text
 
 
 def load_existing_market():
@@ -42,7 +70,8 @@ def load_existing_market():
             return json.loads(MARKET_PATH.read_text(encoding="utf-8"))
         except Exception:
             pass
-    # default skeleton
+
+    # Default structure
     return {
         "updatedAt": None,
         "fearGreed": {"value": None, "label": None, "asof": None, "source": None},
@@ -51,189 +80,211 @@ def load_existing_market():
     }
 
 
-def save_market(obj):
-    MARKET_PATH.parent.mkdir(parents=True, exist_ok=True)
-    MARKET_PATH.write_text(
-        json.dumps(obj, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-
-def http_get_text(url):
-    r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-    r.raise_for_status()
-    return r.text
-
-
-def http_get_json(url):
-    r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-    r.raise_for_status()
-    return r.json()
-
-
 def label_fng(v):
     if v is None:
         return None
-    # simple CNN-like buckets
+    # simple bins
     if v <= 24:
-        return "Extreme fear"
+        return "Ekstrem frygt"
     if v <= 44:
-        return "Fear"
+        return "Frygt"
     if v <= 54:
         return "Neutral"
     if v <= 74:
-        return "Greed"
-    return "Extreme greed"
+        return "Grådighed"
+    return "Ekstrem grådighed"
 
 
-def find_current_fng_value(payload):
+def _walk_find_numbers(obj):
+    """Find alle tal-lignende værdier dybt i JSON (som floats)."""
+    nums = []
+    stack = [obj]
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                # gem både key og value, så vi kan spotte mønstre
+                stack.append(v)
+        elif isinstance(cur, list):
+            stack.extend(cur)
+        else:
+            fv = safe_float(cur)
+            if fv is not None:
+                nums.append(fv)
+    return nums
+
+
+def _find_fng_from_graph_json(payload):
     """
-    CNN graphdata JSON kan ændre format.
-    Vi prøver at finde en 'now' værdi robust ved at traversere.
-    Typisk ligger det i payload['fear_and_greed']['now']['value'] eller lign.
+    CNN graphdata har skiftet format flere gange.
+    Vi prøver flere patterns:
+    - noget med now.value / now.score
+    - noget der hedder fear_and_greed / fearAndGreed og indeholder en "now"
+    - fallback: find et heltal 0-100 som "ligner" et index (sidste udvej)
     """
+    # 1) Generic: find dict med now -> { value/score }
     stack = [payload]
     while stack:
         cur = stack.pop()
         if isinstance(cur, dict):
-            # mønster: {"now": {"value": 53, ...}}
-            if "now" in cur and isinstance(cur["now"], dict) and "value" in cur["now"]:
-                v = safe_float(cur["now"]["value"])
-                if v is not None:
-                    return v
-            # eller {"now": 53}
-            if "now" in cur and not isinstance(cur["now"], (dict, list)):
-                v = safe_float(cur["now"])
-                if v is not None:
-                    return v
-            stack.extend(cur.values())
+            # pattern: cur["now"] er dict og har value/score
+            now = cur.get("now")
+            if isinstance(now, dict):
+                for key in ("value", "score", "index"):
+                    if key in now:
+                        v = safe_int_0_100(now.get(key))
+                        if v is not None:
+                            return v
+            # gå dybere
+            for v in cur.values():
+                stack.append(v)
         elif isinstance(cur, list):
             stack.extend(cur)
+
+    # 2) Specifikke keys
+    if isinstance(payload, dict):
+        for key in ("fear_and_greed", "fearAndGreed", "fear_greed", "fearGreed"):
+            if key in payload and isinstance(payload[key], dict):
+                d = payload[key]
+                # prøv både "now" og "data" felter
+                now = d.get("now")
+                if isinstance(now, dict):
+                    for k in ("value", "score", "index"):
+                        v = safe_int_0_100(now.get(k))
+                        if v is not None:
+                            return v
+                # nogle gange ligger det bare som "score"
+                v = safe_int_0_100(d.get("score") or d.get("value") or d.get("index"))
+                if v is not None:
+                    return v
+
+    # 3) Last resort: scan alle tal og find et heltal 0-100 (men undgå fx years/dates)
+    nums = _walk_find_numbers(payload)
+    candidates = [int(round(x)) for x in nums if 0 <= x <= 100]
+    # typisk er index et heltal — vi tager det mest "heltals-agtige"
+    for c in candidates:
+        if 0 <= c <= 100:
+            return c
+
     return None
 
 
-def fetch_fng_from_cnn_json():
-    """
-    Prøver CNN dataviz JSON endpoint for i dag (UTC dato).
-    """
-    today = datetime.now(timezone.utc).date().isoformat()
-    url = CNN_FNG_JSON_TODAY.format(date=today)
-    payload = http_get_json(url)
-
-    v = find_current_fng_value(payload)
-    if v is None:
-        raise RuntimeError("Could not locate Fear & Greed value in CNN JSON payload")
-
-    return {
-        "value": v,
-        "label": label_fng(v),
-        "asof": today,
-        "source": "CNN (dataviz json)",
-    }
-
-
-def fetch_fng_from_cnn_page_fallback():
-    """
-    Fallback: henter HTML og prøver at finde et tal 0-100.
-    Ikke garanteret (CNN ændrer siden), men nogle gange virker det.
-    """
-    html = http_get_text(CNN_FNG_PAGE)
-
-    # Prøv nogle typiske mønstre (meget defensivt)
-    # 1) JSON-ish: "fearGreedIndex": 62
-    m = re.search(r'"fearGreedIndex"\s*:\s*(\d{1,3})', html)
-    if m:
-        v = safe_float(m.group(1))
-        if v is not None and 0 <= v <= 100:
-            today = datetime.now(timezone.utc).date().isoformat()
+def fetch_fng_best_effort(notes):
+    # A) Graph JSON
+    try:
+        payload = fetch_json(CNN_GRAPH_URL)
+        v = _find_fng_from_graph_json(payload)
+        if v is not None:
             return {
                 "value": v,
                 "label": label_fng(v),
-                "asof": today,
-                "source": "CNN (page fallback)",
+                "asof": datetime.now(timezone.utc).date().isoformat(),
+                "source": "CNN (graphdata)",
             }
+        notes.append("Fear&Greed: kunne ikke finde 0-100 i CNN graphdata.")
+    except Exception as e:
+        notes.append(f"Fear&Greed graphdata failed: {type(e).__name__}: {e}")
 
-    # 2) et "now" value: "now":{"value":62
-    m = re.search(r'"now"\s*:\s*\{\s*"value"\s*:\s*(\d{1,3})', html)
-    if m:
-        v = safe_float(m.group(1))
-        if v is not None and 0 <= v <= 100:
-            today = datetime.now(timezone.utc).date().isoformat()
-            return {
-                "value": v,
-                "label": label_fng(v),
-                "asof": today,
-                "source": "CNN (page fallback now)",
-            }
+    # B) HTML side (regex)
+    try:
+        html = fetch_text(CNN_PAGE_URL)
+        # Prøv et par typiske mønstre: "fearAndGreed":{... "now":{..."value": 62 ...}}
+        patterns = [
+            r'"fearAndGreed"\s*:\s*\{.*?"now"\s*:\s*\{.*?"value"\s*:\s*(\d{1,3})',
+            r'"fear_and_greed"\s*:\s*\{.*?"now"\s*:\s*\{.*?"value"\s*:\s*(\d{1,3})',
+            r'"now"\s*:\s*\{[^}]*?"value"\s*:\s*(\d{1,3})',
+            # nogle gange bare "score": 62
+            r'"score"\s*:\s*(\d{1,3})',
+        ]
+        for p in patterns:
+            m = re.search(p, html, flags=re.IGNORECASE | re.DOTALL)
+            if m:
+                v = safe_int_0_100(m.group(1))
+                if v is not None:
+                    return {
+                        "value": v,
+                        "label": label_fng(v),
+                        "asof": datetime.now(timezone.utc).date().isoformat(),
+                        "source": "CNN (page)",
+                    }
+        notes.append("Fear&Greed: kunne ikke extracte fra CNN page (regex).")
+    except Exception as e:
+        notes.append(f"Fear&Greed page failed: {type(e).__name__}: {e}")
 
-    raise RuntimeError("Fallback could not extract Fear & Greed from CNN page")
+    return None
 
 
-def fetch_vix_from_fred():
-    """
-    FRED CSV: DATE,VIXCLS
-    Finder seneste linje med tal.
-    """
-    csv_text = http_get_text(FRED_VIX_CSV)
-    lines = [ln.strip() for ln in csv_text.splitlines() if ln.strip()]
-    if len(lines) < 2:
-        raise RuntimeError("FRED CSV too short")
-
-    last_date = None
-    last_val = None
-
-    # gå bagfra og find første gyldige tal
-    for ln in reversed(lines[1:]):  # skip header
-        parts = ln.split(",")
-        if len(parts) < 2:
-            continue
-        d, v = parts[0].strip(), parts[1].strip()
-        fv = safe_float(v)
-        if fv is None:
-            continue
-        last_date, last_val = d, fv
-        break
-
-    if last_val is None:
-        raise RuntimeError("Could not parse any VIX value from FRED CSV")
-
-    return {
-        "value": last_val,
-        "asof": last_date,
-        "source": "FRED (VIXCLS)",
-    }
+def fetch_vix_from_fred(notes):
+    try:
+        csv_text = fetch_text(FRED_VIX_CSV)
+        lines = [ln.strip() for ln in csv_text.splitlines() if ln.strip()]
+        # header: DATE,VIXCLS
+        # find sidste gyldige datapunkt bagfra
+        last_date, last_val = None, None
+        for ln in reversed(lines[1:]):
+            parts = ln.split(",")
+            if len(parts) >= 2:
+                d, v = parts[0], parts[1]
+                fv = safe_float(v)
+                if fv is not None:
+                    last_date, last_val = d, fv
+                    break
+        if last_val is None:
+            notes.append("VIX: ingen gyldig værdi i FRED CSV.")
+            return None
+        return {"value": round(last_val, 2), "asof": last_date, "source": "FRED (VIXCLS)"}
+    except Exception as e:
+        notes.append(f"VIX failed: {type(e).__name__}: {e}")
+        return None
 
 
 def main():
-    out = load_existing_market()
+    existing = load_existing_market()
 
-    # ensure structure
+    # vi skriver vores egne noter for denne run (max 6 linjer for ikke at spamme)
+    run_notes = []
+
+    out = existing if isinstance(existing, dict) else {}
+    out["updatedAt"] = utc_now_iso()
+
+    # Sørg for structure
     out.setdefault("fearGreed", {"value": None, "label": None, "asof": None, "source": None})
     out.setdefault("vix", {"value": None, "asof": None, "source": None})
     out.setdefault("notes", [])
 
-    out["updatedAt"] = utc_now_iso()
+    # --- Fear & Greed (BEST EFFORT) ---
+    fng = fetch_fng_best_effort(run_notes)
+    if fng is not None and fng.get("value") is not None:
+        out["fearGreed"] = fng
+    else:
+        # VIGTIGT: behold sidste kendte værdi i stedet for at nulstille
+        prev = out.get("fearGreed") or {}
+        if prev.get("value") is None:
+            run_notes.append("Fear&Greed: stadig ingen værdi (beholder None).")
+        else:
+            run_notes.append("Fear&Greed: fetch fejlede, beholdt sidste kendte værdi.")
 
-    # Fear & Greed (må ikke stoppe build)
-    try:
-        out["fearGreed"] = fetch_fng_from_cnn_json()
-    except Exception as e1:
-        out["notes"].append(f"Fear&Greed JSON failed: {type(e1).__name__}: {e1}")
-        # fallback
-        try:
-            out["fearGreed"] = fetch_fng_from_cnn_page_fallback()
-        except Exception as e2:
-            out["notes"].append(f"Fear&Greed fallback failed: {type(e2).__name__}: {e2}")
-            # behold eksisterende out["fearGreed"] (fra gamle market.json)
+    # --- VIX (stabil) ---
+    vix = fetch_vix_from_fred(run_notes)
+    if vix is not None and vix.get("value") is not None:
+        out["vix"] = vix
+    else:
+        prev = out.get("vix") or {}
+        if prev.get("value") is None:
+            run_notes.append("VIX: stadig ingen værdi (beholder None).")
+        else:
+            run_notes.append("VIX: fetch fejlede, beholdt sidste kendte værdi.")
 
-    # VIX (stabil)
-    try:
-        out["vix"] = fetch_vix_from_fred()
-    except Exception as e:
-        out["notes"].append(f"VIX failed: {type(e).__name__}: {e}")
-        # behold eksisterende out["vix"] hvis den fandtes
+    # Append noter (men begræns)
+    merged_notes = (out.get("notes") or [])
+    # Fjern gamle hvis de er blevet for mange
+    merged_notes = merged_notes[-20:]
+    run_notes = run_notes[:6]
+    out["notes"] = merged_notes + run_notes
 
-    save_market(out)
+    # Write
+    MARKET_PATH.parent.mkdir(parents=True, exist_ok=True)
+    MARKET_PATH.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Wrote {MARKET_PATH}")
 
 
