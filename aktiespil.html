@@ -73,8 +73,7 @@
   <div class="wrap">
     <h1>Aktiespil-mode</h1>
     <p class="lead">
-      Log dine handler i 3 porteføljer (A/B/C). Siden forsøger at gemme et “snapshot” (score, trend og market mood) pr. trade,
-      så du kan se bagefter om din metode faktisk gav edge.
+      Log dine handler i 3 porteføljer (A/B/C). Du kan tilføje benchmark-kurs pr. trade, så du bagefter kan måle edge i Excel.
     </p>
 
     <div class="grid">
@@ -133,8 +132,7 @@
         </div>
 
         <p class="hint" id="marketHint" style="margin:10px 0 0">
-          Tip: Hvis du ikke har <span class="mono">data/market.json</span> endnu, kan du stadig logge trades.
-          (Du kan senere få workflow til at opdatere den automatisk – men til 9/2 er manuel input helt fint.)
+          Tip: Hvis market.json mangler, kan du stadig logge trades. Benchmark per trade gør sammenligningen nem.
         </p>
       </div>
 
@@ -145,7 +143,7 @@
           <div class="field">
             <label>Aktie (ticker/id)</label>
             <select id="tickerSelect"></select>
-            <div class="hint">Listen kommer fra dine kendte aktier (data/id.json). Du kan også skrive manuelt under “Noter”.</div>
+            <div class="hint">Listen kommer fra dine kendte aktier (data/id.json). Hvis noget mangler, kan du stadig logge trade.</div>
           </div>
 
           <div class="field" style="min-width:160px;flex:0.7">
@@ -173,9 +171,22 @@
         </div>
 
         <div class="row">
+          <div class="field" style="min-width:220px">
+            <label>Benchmark navn (pr. trade)</label>
+            <input id="benchName" placeholder="fx MSCI World / S&amp;P 500 / OMXC25" value="MSCI World" />
+            <div class="hint">Brug altid samme benchmark, så sammenligningen bliver ren.</div>
+          </div>
+          <div class="field" style="min-width:200px">
+            <label>Benchmark kurs (samme dato)</label>
+            <input id="benchClose" type="number" step="0.01" placeholder="fx 3123.45" />
+            <div class="hint">Find tallet hurtigt på nettet og tast det ind. Det er OK til MVP-testen.</div>
+          </div>
+        </div>
+
+        <div class="row">
           <div class="field" style="min-width:260px">
             <label>Noter (hvorfor?)</label>
-            <textarea id="notes" placeholder="fx: Trend op + score 66, køb på pullback."></textarea>
+            <textarea id="notes" placeholder="fx: Trend op + score 66, køb på pullback. VIX=__, F&amp;G=__."></textarea>
             <div class="hint">Skriv altid hvorfor. Ellers lærer du ingenting af testen.</div>
           </div>
         </div>
@@ -194,7 +205,7 @@
             <div class="field" style="min-width:220px;flex:1">
               <label>“B-regler” quick check (vejledning)</label>
               <div class="hint" id="bRules">
-                Køb kun hvis Trend=op og Score ≥ 60. Undgå hvis Trend=ned. (Vi kan justere reglerne senere.)
+                Køb kun hvis Trend=op og Score ≥ 60. Undgå hvis Trend=ned. (Vi kan stramme reglerne senere.)
               </div>
             </div>
           </div>
@@ -212,7 +223,7 @@
         <div class="pill"><span class="muted">Storage:</span> <span class="mono">localStorage</span></div>
       </div>
       <p class="hint" style="margin:8px 0 12px">
-        Du kan altid eksportere og smide i Excel bagefter. Hvis du sletter cache/localStorage i browseren, mister du loggen – så eksportér jævnligt.
+        Eksportér jævnligt (CSV/JSON). Hvis du sletter browserdata, mister du loggen.
       </p>
 
       <div style="overflow:auto">
@@ -225,33 +236,33 @@
               <th>Side</th>
               <th>Kurs</th>
               <th>Antal</th>
+              <th>Benchmark</th>
               <th>Snapshot</th>
               <th>Noter</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="tbody">
-            <tr><td colspan="9" class="muted">Ingen trades endnu.</td></tr>
+            <tr><td colspan="10" class="muted">Ingen trades endnu.</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
     <p class="hint" style="margin:14px 0 0">
-      Næste step (når du er klar): vi kobler “køb/sælg forslag” på dine aktie-scorer + market mood, og vi gør market-data mere stabilt.
+      Når du har 1-2 ugers data: eksportér CSV og sammenlign B vs benchmark pr. trade (entry-dato).
     </p>
   </div>
 
 <script>
 /* =========================
-   Storage keys (v1)
+   Storage keys (v2)
 ========================= */
-const LS_TRADES = "aktie_trades_v1";
+const LS_TRADES = "aktie_trades_v2";
 const LS_PORTF  = "aktie_active_portfolio_v1";
 
 /* =========================
    Stocks list (robust)
-   - prøver flere keys
 ========================= */
 const FALLBACK_STOCKS = [
   { id:"novo", name:"Novo Nordisk" },
@@ -282,7 +293,6 @@ function tryLoadStocksFromLocalStorage(){
       if(!raw) continue;
       const v = JSON.parse(raw);
       if(Array.isArray(v) && v.length){
-        // accepter både {id,name} og {ticker,name}
         return v.map(x => ({
           id: (x.id || x.ticker || "").toString().trim().toLowerCase(),
           name: (x.name || x.title || x.id || x.ticker || "").toString().trim()
@@ -320,19 +330,15 @@ function safeNum(x){
 }
 
 /* =========================
-   Market mood (from market.json)
-   expected: { updatedAt, fearGreed:{value,label,asof,source}, vix:{value,asof,source}, notes:[...] }
+   Market mood (optional from market.json)
 ========================= */
 let MARKET = null;
 
 function moodFrom(fngValue, vixValue){
   const f = safeNum(fngValue);
   const v = safeNum(vixValue);
-
-  // hvis kun én findes
   if(f === null && v === null) return { mood:"—", cls:"muted", reason:"Mangler data" };
 
-  // simple labels (kan justeres senere)
   let sentiment = "Neutral";
   if(f !== null){
     if(f < 25) sentiment = "Ekstrem frygt";
@@ -349,7 +355,6 @@ function moodFrom(fngValue, vixValue){
     else vol = "Lav uro";
   }
 
-  // samlet mood (super simpelt)
   let mood = "Neutral";
   if((f !== null && f < 45) || (v !== null && v >= 25)) mood = "Defensivt";
   if((f !== null && f > 60) && (v !== null && v < 20)) mood = "Offensivt";
@@ -393,12 +398,11 @@ function renderMarket(){
 
   $("marketHint").textContent = MARKET
     ? (m.reason + " (Dette er kontekst – ikke rådgivning.)")
-    : "Ingen market.json fundet endnu. Du kan stadig logge trades. (Senere kan vi automatisere mere stabilt.)";
+    : "Ingen market.json fundet. Det er OK til testen – du bruger benchmark per trade.";
 }
 
 /* =========================
    Stock snapshot (from data/<id>.json)
-   expected: { ticker, asOf, close, changePct, ma20, ma50, ma200, vol20, history:[...] }
 ========================= */
 async function loadStockData(id){
   try{
@@ -415,10 +419,8 @@ function calcTrend(d){
   const c = safeNum(d.close);
   const ma50 = safeNum(d.ma50);
   const ma200 = safeNum(d.ma200);
-
   if(c === null || (ma50 === null && ma200 === null)) return { trend:"—", cls:"muted" };
 
-  // primært: over/under MA50. sekundært MA200
   let up = 0, down = 0;
   if(ma50 !== null) (c >= ma50 ? up++ : down++);
   if(ma200 !== null) (c >= ma200 ? up++ : down++);
@@ -428,7 +430,6 @@ function calcTrend(d){
   return { trend:"Sideways", cls:"warn" };
 }
 
-// simpelt score 0-100 (bare for snapshot/logging)
 function calcScore(d){
   if(!d) return null;
   const c = safeNum(d.close);
@@ -440,11 +441,9 @@ function calcScore(d){
   const vol20 = safeNum(d.vol20);
 
   let score = 50;
-
-  // trend-bias
   if(ma50 !== null){
     const pct = (c - ma50) / ma50;
-    score += clamp(pct * 300, -18, 18); // +/-18 point
+    score += clamp(pct * 300, -18, 18);
   }
   if(ma200 !== null){
     const pct = (c - ma200) / ma200;
@@ -454,26 +453,41 @@ function calcScore(d){
     const pct = (c - ma20) / ma20;
     score += clamp(pct * 180, -10, 10);
   }
-
-  // risiko trækker ned ved høj vol
   if(vol20 !== null){
     score -= clamp(vol20 * 1.8, 0, 18);
   }
-
   return Math.round(clamp(score, 0, 100));
 }
 
-function snapshotText(d){
+async function updateSnapshotPreview(){
+  const id = $("tickerSelect").value;
+  const d = await loadStockData(id);
   const trend = calcTrend(d);
   const score = calcScore(d);
-  const price = safeNum(d?.close);
-  const asof = d?.asOf || d?.asof || d?.date || "—";
-  const s = [];
-  if(score !== null) s.push(`score ${score}`);
-  if(trend.trend !== "—") s.push(`trend ${trend.trend}`);
-  if(price !== null) s.push(`close ${price}`);
-  if(asof !== "—") s.push(`asOf ${asof}`);
-  return s.length ? s.join(" | ") : "—";
+
+  const f = MARKET?.fearGreed?.value ?? null;
+  const v = MARKET?.vix?.value ?? null;
+  const m = moodFrom(f, v);
+
+  const parts = [];
+  if(score !== null) parts.push(`score ${score}`);
+  if(trend.trend !== "—") parts.push(`trend ${trend.trend}`);
+  if(m.mood !== "—") parts.push(`mood ${m.mood}`);
+  $("snap").textContent = parts.length ? parts.join(" | ") : "—";
+}
+
+async function prefillPriceFromData(){
+  const id = $("tickerSelect").value;
+  const d = await loadStockData(id);
+  const c = safeNum(d?.close);
+  if(c !== null){
+    $("price").value = c;
+    const asof = (d?.asOf || d?.asof || "").toString().slice(0,10);
+    if(asof && /^\d{4}-\d{2}-\d{2}$/.test(asof)) $("date").value = asof;
+  }else{
+    alert("Kunne ikke hente close fra data/" + id + ".json");
+  }
+  await updateSnapshotPreview();
 }
 
 /* =========================
@@ -504,7 +518,12 @@ function toCsv(rows){
     if(/[,"\n;]/.test(s)) return `"${s.replaceAll('"','""')}"`;
     return s;
   };
-  const headers = ["id","date","portfolio","ticker","side","price","qty","score","trend","marketMood","fearGreed","vix","notes","createdAt"];
+  const headers = [
+    "id","date","portfolio","ticker","side","price","qty",
+    "benchmarkName","benchmarkClose",
+    "score","trend","marketMood","fearGreed","vix",
+    "notes","createdAt"
+  ];
   const lines = [headers.join(",")];
   for(const r of rows){
     const line = headers.map(h => esc(r[h]));
@@ -548,7 +567,6 @@ function renderTrades(){
     .filter(t => !ft || (t.ticker || "").toLowerCase().includes(ft))
     .sort((a,b) => (a.date || "").localeCompare(b.date || "") || (a.createdAt || "").localeCompare(b.createdAt || ""));
 
-  // KPIs
   $("kpiCount").textContent = filtered.length;
   $("kpiBuys").textContent  = filtered.filter(x => x.side === "BUY").length;
   $("kpiSells").textContent = filtered.filter(x => x.side === "SELL").length;
@@ -559,7 +577,7 @@ function renderTrades(){
 
   if(!filtered.length){
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="9" class="muted">Ingen trades i denne portefølje endnu.</td>`;
+    tr.innerHTML = `<td colspan="10" class="muted">Ingen trades i denne portefølje endnu.</td>`;
     tb.appendChild(tr);
     return;
   }
@@ -572,6 +590,8 @@ function renderTrades(){
     if(t.marketMood) snap.push(`mood ${t.marketMood}`);
     const snapText = snap.length ? snap.join(" | ") : "—";
 
+    const benchText = (t.benchmarkName || "—") + (t.benchmarkClose != null ? ` @ ${t.benchmarkClose}` : "");
+
     tr.innerHTML = `
       <td class="mono">${t.date || "—"}</td>
       <td><b>${t.portfolio}</b></td>
@@ -579,6 +599,7 @@ function renderTrades(){
       <td><b>${formatSide(t.side)}</b></td>
       <td class="mono">${t.price ?? "—"}</td>
       <td class="mono">${t.qty ?? "—"}</td>
+      <td class="small">${benchText}</td>
       <td class="small">${snapText}</td>
       <td class="small">${(t.notes || "").replaceAll("<","&lt;").replaceAll(">","&gt;")}</td>
       <td style="white-space:nowrap">
@@ -588,7 +609,6 @@ function renderTrades(){
     tb.appendChild(tr);
   }
 
-  // bind delete
   tb.querySelectorAll("button[data-del]").forEach(btn => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-del");
@@ -603,7 +623,6 @@ function renderTrades(){
    UI init
 ========================= */
 function fillTickerSelect(){
-  // vis sorteret efter name
   const sorted = [...STOCKS].sort((a,b)=>a.name.localeCompare(b.name));
   const sel = $("tickerSelect");
   sel.innerHTML = "";
@@ -615,38 +634,6 @@ function fillTickerSelect(){
   }
 }
 
-async function updateSnapshotPreview(){
-  const id = $("tickerSelect").value;
-  const d = await loadStockData(id);
-  const trend = calcTrend(d);
-  const score = calcScore(d);
-
-  const f = MARKET?.fearGreed?.value ?? null;
-  const v = MARKET?.vix?.value ?? null;
-  const m = moodFrom(f, v);
-
-  const parts = [];
-  if(score !== null) parts.push(`score ${score}`);
-  if(trend.trend !== "—") parts.push(`trend ${trend.trend}`);
-  if(m.mood !== "—") parts.push(`mood ${m.mood}`);
-  $("snap").textContent = parts.length ? parts.join(" | ") : "—";
-}
-
-async function prefillPriceFromData(){
-  const id = $("tickerSelect").value;
-  const d = await loadStockData(id);
-  const c = safeNum(d?.close);
-  if(c !== null){
-    $("price").value = c;
-    // dato fra data hvis findes
-    const asof = (d?.asOf || d?.asof || "").toString().slice(0,10);
-    if(asof && /^\d{4}-\d{2}-\d{2}$/.test(asof)) $("date").value = asof;
-  }else{
-    alert("Kunne ikke hente close fra data/" + id + ".json");
-  }
-  await updateSnapshotPreview();
-}
-
 async function addTrade(){
   const portfolio = currentPortfolio();
   const ticker = $("tickerSelect").value;
@@ -655,6 +642,8 @@ async function addTrade(){
 
   const price = safeNum($("price").value);
   const qty = safeNum($("qty").value);
+  const benchName = ($("benchName").value || "").trim();
+  const benchClose = safeNum($("benchClose").value);
 
   if(price === null || price <= 0){
     alert("Udfyld en gyldig kurs.");
@@ -664,10 +653,17 @@ async function addTrade(){
     alert("Udfyld et gyldigt antal.");
     return;
   }
+  if(!benchName){
+    alert("Skriv benchmark navn (fx MSCI World).");
+    return;
+  }
+  if(benchClose === null || benchClose <= 0){
+    alert("Udfyld benchmark kurs (samme dato).");
+    return;
+  }
 
   const notes = $("notes").value.trim();
 
-  // Snapshot
   const d = await loadStockData(ticker);
   const trend = calcTrend(d).trend;
   const score = calcScore(d);
@@ -684,11 +680,16 @@ async function addTrade(){
     side,
     price,
     qty,
+
+    benchmarkName: benchName,
+    benchmarkClose: benchClose,
+
     score,
     trend: (trend === "—" ? null : trend),
     marketMood: (mood === "—" ? null : mood),
     fearGreed: (safeNum(f) === null ? null : safeNum(f)),
     vix: (safeNum(v) === null ? null : safeNum(v)),
+
     notes,
     createdAt: nowIso(),
   };
@@ -697,10 +698,9 @@ async function addTrade(){
   all.push(trade);
   saveTrades(all);
 
-  // reset småting
   $("notes").value = "";
   $("qty").value = "";
-  // behold price/dato hvis du laver flere handler
+
   renderTrades();
   await updateSnapshotPreview();
 }
@@ -739,10 +739,8 @@ function wipePortfolio(){
   applyPortfolioFromStorage();
   fillTickerSelect();
 
-  // Market
   await loadMarket();
 
-  // events
   $("portfolio").addEventListener("change", () => {
     persistPortfolio();
     renderTrades();
