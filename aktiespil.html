@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aktiespil (MVP)</title>
+  <style>
+    :root { --border:#e7e7e7; --text:#111; --muted:#666; --bg:#fff; --soft:#fafafa; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text)}
+    .nav{position:sticky;top:0;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--border);z-index:10}
+    .navinner{max-width:980px;margin:0 auto;padding:10px 18px;display:flex;gap:12px;align-items:center}
+    .brand{font-weight:800}
+    a{text-decoration:none;color:var(--text);padding:8px 10px;border-radius:10px}
+    a:hover{background:#f4f4f4}
+    .spacer{flex:1}
+    .pill{display:inline-flex;gap:6px;align-items:center;border:1px solid #ddd;border-radius:999px;padding:6px 10px;font-size:13px;color:var(--muted);background:#fff}
+    .wrap{max-width:980px;margin:0 auto;padding:22px 18px}
+    h1{margin:10px 0 6px;font-size:34px;letter-spacing:-.4px}
+    p.lead{margin:0 0 18px;color:var(--muted)}
+    .card{border:1px solid var(--border);border-radius:18px;padding:16px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.02)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:180px;flex:1}
+    label{font-size:12px;color:var(--muted)}
+    input,select,textarea{
+      padding:10px 12px;border:1px solid #ddd;border-radius:12px;font:inherit;background:#fff;outline:none
+    }
+    textarea{min-height:42px;resize:vertical}
+    button{
+      border:1px solid #111;background:#111;color:#fff;padding:10px 12px;border-radius:12px;font:inherit;cursor:pointer
+    }
+    button.secondary{background:#fff;color:#111;border-color:#ddd}
+    button.danger{background:#fff;color:#b00020;border-color:#f0c0c8}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--border);border-radius:14px}
+    th,td{padding:10px 10px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top}
+    th{background:var(--soft);text-align:left;color:#333;font-weight:700}
+    tr:last-child td{border-bottom:none}
+    .muted{color:var(--muted)}
+    .kpi{display:flex;gap:10px;flex-wrap:wrap}
+    .kpi .mini{border:1px solid #eee;border-radius:14px;padding:10px 12px;background:#fff}
+    .mini .v{font-weight:800;font-size:18px}
+    .mini .k{font-size:12px;color:var(--muted)}
+    .hint{font-size:12px;color:var(--muted);line-height:1.35}
+    .ok{color:#0a7a2f}
+    .warn{color:#a24b00}
+    .bad{color:#b00020}
+    .chips{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{border:1px solid #ddd;border-radius:999px;padding:6px 10px;font-size:12px;background:#fff}
+    .chip b{font-weight:800}
+    .hr{height:1px;background:var(--border);margin:12px 0}
+    .right{margin-left:auto}
+    .small{font-size:12px}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <div class="navinner">
+      <div class="brand">Aktie-MVP</div>
+      <a href="./index.html">Forside</a>
+      <a href="./stock.html?t=novo">Aktier</a>
+      <a href="./market.html">Marked</a>
+      <a href="./aktiespil.html"><b>Aktiespil</b></a>
+      <a href="./laering.html">Læring</a>
+      <a href="./om.html">Om</a>
+      <div class="spacer"></div>
+      <div class="pill"><span class="muted">Sidst loaded:</span> <span id="loadedAt" class="mono">—</span></div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h1>Aktiespil-mode</h1>
+    <p class="lead">
+      Log dine handler i 3 porteføljer (A/B/C). Siden forsøger at gemme et “snapshot” (score, trend og market mood) pr. trade,
+      så du kan se bagefter om din metode faktisk gav edge.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="row">
+          <div class="field" style="min-width:240px;flex:0.9">
+            <label>Aktiv portefølje</label>
+            <select id="portfolio">
+              <option value="A">A — Freestyle</option>
+              <option value="B">B — Regelbaseret (din side)</option>
+              <option value="C">C — Baseline / Hold</option>
+            </select>
+          </div>
+
+          <div class="field" style="min-width:220px;flex:1">
+            <label>Filtrér trades (ticker)</label>
+            <input id="filterTicker" placeholder="fx novo, dsv, maersk..." />
+          </div>
+
+          <div class="right row">
+            <button class="secondary" id="exportJson">Eksport JSON</button>
+            <button class="secondary" id="exportCsv">Eksport CSV</button>
+            <button class="danger" id="wipePortfolio">Nulstil portefølje</button>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="kpi" id="kpis">
+          <div class="mini">
+            <div class="v" id="kpiCount">0</div>
+            <div class="k">Trades i portefølje</div>
+          </div>
+          <div class="mini">
+            <div class="v" id="kpiBuys">0</div>
+            <div class="k">Køb</div>
+          </div>
+          <div class="mini">
+            <div class="v" id="kpiSells">0</div>
+            <div class="k">Salg</div>
+          </div>
+          <div class="mini">
+            <div class="v" id="kpiLast">—</div>
+            <div class="k">Sidste trade</div>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="chips" id="marketChips">
+          <div class="chip"><b>Market mood:</b> <span id="mood">—</span></div>
+          <div class="chip"><b>Fear &amp; Greed:</b> <span id="fng">—</span></div>
+          <div class="chip"><b>VIX:</b> <span id="vix">—</span></div>
+          <div class="chip"><b>Dato:</b> <span id="mdate">—</span></div>
+          <div class="chip"><b>Kilde:</b> <span id="msrc" class="muted">—</span></div>
+        </div>
+
+        <p class="hint" id="marketHint" style="margin:10px 0 0">
+          Tip: Hvis du ikke har <span class="mono">data/market.json</span> endnu, kan du stadig logge trades.
+          (Du kan senere få workflow til at opdatere den automatisk – men til 9/2 er manuel input helt fint.)
+        </p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 10px">Tilføj trade</h3>
+
+        <div class="row">
+          <div class="field">
+            <label>Aktie (ticker/id)</label>
+            <select id="tickerSelect"></select>
+            <div class="hint">Listen kommer fra dine kendte aktier (data/id.json). Du kan også skrive manuelt under “Noter”.</div>
+          </div>
+
+          <div class="field" style="min-width:160px;flex:0.7">
+            <label>Handling</label>
+            <select id="side">
+              <option value="BUY">KØB</option>
+              <option value="SELL">SALG</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label>Dato</label>
+            <input id="date" type="date" />
+          </div>
+          <div class="field">
+            <label>Kurs</label>
+            <input id="price" type="number" step="0.01" placeholder="fx 388.90" />
+          </div>
+          <div class="field">
+            <label>Antal</label>
+            <input id="qty" type="number" step="1" placeholder="fx 10" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field" style="min-width:260px">
+            <label>Noter (hvorfor?)</label>
+            <textarea id="notes" placeholder="fx: Trend op + score 66, køb på pullback."></textarea>
+            <div class="hint">Skriv altid hvorfor. Ellers lærer du ingenting af testen.</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="addTrade">Gem trade</button>
+          <button class="secondary" id="prefillFromData">Hent kurs fra data (hvis findes)</button>
+          <div class="spacer"></div>
+          <div class="pill"><span class="muted">Snapshot:</span> <span id="snap" class="mono">—</span></div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="card" style="padding:12px;background:var(--soft)">
+          <div class="row" style="margin:0">
+            <div class="field" style="min-width:220px;flex:1">
+              <label>“B-regler” quick check (vejledning)</label>
+              <div class="hint" id="bRules">
+                Køb kun hvis Trend=op og Score ≥ 60. Undgå hvis Trend=ned. (Vi kan justere reglerne senere.)
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div style="height:14px"></div>
+
+    <div class="card">
+      <div class="row">
+        <h3 style="margin:0">Trade-log</h3>
+        <div class="spacer"></div>
+        <div class="pill"><span class="muted">Storage:</span> <span class="mono">localStorage</span></div>
+      </div>
+      <p class="hint" style="margin:8px 0 12px">
+        Du kan altid eksportere og smide i Excel bagefter. Hvis du sletter cache/localStorage i browseren, mister du loggen – så eksportér jævnligt.
+      </p>
+
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Dato</th>
+              <th>Portefølje</th>
+              <th>Aktie</th>
+              <th>Side</th>
+              <th>Kurs</th>
+              <th>Antal</th>
+              <th>Snapshot</th>
+              <th>Noter</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="9" class="muted">Ingen trades endnu.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="hint" style="margin:14px 0 0">
+      Næste step (når du er klar): vi kobler “køb/sælg forslag” på dine aktie-scorer + market mood, og vi gør market-data mere stabilt.
+    </p>
+  </div>
+
+<script>
+/* =========================
+   Storage keys (v1)
+========================= */
+const LS_TRADES = "aktie_trades_v1";
+const LS_PORTF  = "aktie_active_portfolio_v1";
+
+/* =========================
+   Stocks list (robust)
+   - prøver flere keys
+========================= */
+const FALLBACK_STOCKS = [
+  { id:"novo", name:"Novo Nordisk" },
+  { id:"vestas", name:"Vestas" },
+  { id:"dsv", name:"DSV" },
+  { id:"genmab", name:"Genmab" },
+  { id:"coloplast", name:"Coloplast" },
+  { id:"bavarian", name:"Bavarian Nordic" },
+  { id:"maersk", name:"A.P. Møller - Mærsk B" },
+  { id:"pandora", name:"Pandora" },
+  { id:"carlsberg", name:"Carlsberg B" },
+  { id:"fls", name:"FLSmidth" },
+  { id:"iss", name:"ISS" },
+];
+
+function tryLoadStocksFromLocalStorage(){
+  const keys = [
+    "aktie_stocks",
+    "stocks",
+    "AKTIE_STOCKS",
+    "aktieMvpStocks",
+    "aktie_stocks_v1",
+    "aktie_stocks_v2",
+  ];
+  for (const k of keys){
+    try{
+      const raw = localStorage.getItem(k);
+      if(!raw) continue;
+      const v = JSON.parse(raw);
+      if(Array.isArray(v) && v.length){
+        // accepter både {id,name} og {ticker,name}
+        return v.map(x => ({
+          id: (x.id || x.ticker || "").toString().trim().toLowerCase(),
+          name: (x.name || x.title || x.id || x.ticker || "").toString().trim()
+        })).filter(x => x.id && x.name);
+      }
+    }catch(e){}
+  }
+  return null;
+}
+
+let STOCKS = tryLoadStocksFromLocalStorage() || FALLBACK_STOCKS;
+
+/* =========================
+   Helpers
+========================= */
+const $ = (id) => document.getElementById(id);
+
+function nowIso(){
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function todayDateValue(){
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+function clamp(x,min,max){ return Math.max(min, Math.min(max, x)); }
+
+function safeNum(x){
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+}
+
+/* =========================
+   Market mood (from market.json)
+   expected: { updatedAt, fearGreed:{value,label,asof,source}, vix:{value,asof,source}, notes:[...] }
+========================= */
+let MARKET = null;
+
+function moodFrom(fngValue, vixValue){
+  const f = safeNum(fngValue);
+  const v = safeNum(vixValue);
+
+  // hvis kun én findes
+  if(f === null && v === null) return { mood:"—", cls:"muted", reason:"Mangler data" };
+
+  // simple labels (kan justeres senere)
+  let sentiment = "Neutral";
+  if(f !== null){
+    if(f < 25) sentiment = "Ekstrem frygt";
+    else if(f < 45) sentiment = "Frygt";
+    else if(f <= 55) sentiment = "Neutral";
+    else if(f <= 75) sentiment = "Grådighed";
+    else sentiment = "Ekstrem grådighed";
+  }
+
+  let vol = "Normal";
+  if(v !== null){
+    if(v >= 30) vol = "Høj uro";
+    else if(v >= 20) vol = "Moderat uro";
+    else vol = "Lav uro";
+  }
+
+  // samlet mood (super simpelt)
+  let mood = "Neutral";
+  if((f !== null && f < 45) || (v !== null && v >= 25)) mood = "Defensivt";
+  if((f !== null && f > 60) && (v !== null && v < 20)) mood = "Offensivt";
+  if((f !== null && f > 75) && (v !== null && v < 18)) mood = "Overophedet";
+  if((f !== null && f < 25) && (v !== null && v >= 30)) mood = "Panik";
+
+  let cls = "muted";
+  if(mood === "Offensivt") cls = "ok";
+  if(mood === "Defensivt") cls = "warn";
+  if(mood === "Overophedet" || mood === "Panik") cls = "bad";
+
+  return { mood, cls, reason:`Sentiment: ${sentiment}. Vol: ${vol}.` };
+}
+
+async function loadMarket(){
+  try{
+    const r = await fetch("./data/market.json?v=" + Date.now());
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    MARKET = await r.json();
+  }catch(e){
+    MARKET = null;
+  }
+  renderMarket();
+}
+
+function renderMarket(){
+  const f = MARKET?.fearGreed?.value ?? null;
+  const v = MARKET?.vix?.value ?? null;
+  const asof = (MARKET?.fearGreed?.asof || MARKET?.vix?.asof || MARKET?.updatedAt || "—");
+  const src = [MARKET?.fearGreed?.source, MARKET?.vix?.source].filter(Boolean).join(" + ") || "—";
+
+  const m = moodFrom(f, v);
+
+  $("mood").textContent = m.mood;
+  $("mood").className = m.cls;
+
+  $("fng").textContent = (f === null ? "—" : f);
+  $("vix").textContent = (v === null ? "—" : v);
+  $("mdate").textContent = asof;
+  $("msrc").textContent = src;
+
+  $("marketHint").textContent = MARKET
+    ? (m.reason + " (Dette er kontekst – ikke rådgivning.)")
+    : "Ingen market.json fundet endnu. Du kan stadig logge trades. (Senere kan vi automatisere mere stabilt.)";
+}
+
+/* =========================
+   Stock snapshot (from data/<id>.json)
+   expected: { ticker, asOf, close, changePct, ma20, ma50, ma200, vol20, history:[...] }
+========================= */
+async function loadStockData(id){
+  try{
+    const r = await fetch(`./data/${id}.json?v=` + Date.now());
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  }catch(e){
+    return null;
+  }
+}
+
+function calcTrend(d){
+  if(!d) return { trend:"—", cls:"muted" };
+  const c = safeNum(d.close);
+  const ma50 = safeNum(d.ma50);
+  const ma200 = safeNum(d.ma200);
+
+  if(c === null || (ma50 === null && ma200 === null)) return { trend:"—", cls:"muted" };
+
+  // primært: over/under MA50. sekundært MA200
+  let up = 0, down = 0;
+  if(ma50 !== null) (c >= ma50 ? up++ : down++);
+  if(ma200 !== null) (c >= ma200 ? up++ : down++);
+
+  if(up > down) return { trend:"Op", cls:"ok" };
+  if(down > up) return { trend:"Ned", cls:"bad" };
+  return { trend:"Sideways", cls:"warn" };
+}
+
+// simpelt score 0-100 (bare for snapshot/logging)
+function calcScore(d){
+  if(!d) return null;
+  const c = safeNum(d.close);
+  if(c === null) return null;
+
+  const ma20 = safeNum(d.ma20);
+  const ma50 = safeNum(d.ma50);
+  const ma200 = safeNum(d.ma200);
+  const vol20 = safeNum(d.vol20);
+
+  let score = 50;
+
+  // trend-bias
+  if(ma50 !== null){
+    const pct = (c - ma50) / ma50;
+    score += clamp(pct * 300, -18, 18); // +/-18 point
+  }
+  if(ma200 !== null){
+    const pct = (c - ma200) / ma200;
+    score += clamp(pct * 250, -15, 15);
+  }
+  if(ma20 !== null){
+    const pct = (c - ma20) / ma20;
+    score += clamp(pct * 180, -10, 10);
+  }
+
+  // risiko trækker ned ved høj vol
+  if(vol20 !== null){
+    score -= clamp(vol20 * 1.8, 0, 18);
+  }
+
+  return Math.round(clamp(score, 0, 100));
+}
+
+function snapshotText(d){
+  const trend = calcTrend(d);
+  const score = calcScore(d);
+  const price = safeNum(d?.close);
+  const asof = d?.asOf || d?.asof || d?.date || "—";
+  const s = [];
+  if(score !== null) s.push(`score ${score}`);
+  if(trend.trend !== "—") s.push(`trend ${trend.trend}`);
+  if(price !== null) s.push(`close ${price}`);
+  if(asof !== "—") s.push(`asOf ${asof}`);
+  return s.length ? s.join(" | ") : "—";
+}
+
+/* =========================
+   Trades
+========================= */
+function loadTrades(){
+  try{
+    return JSON.parse(localStorage.getItem(LS_TRADES) || "[]");
+  }catch(e){
+    return [];
+  }
+}
+function saveTrades(trades){
+  localStorage.setItem(LS_TRADES, JSON.stringify(trades));
+}
+
+function uid(){
+  return "t_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+}
+
+function formatSide(s){
+  return s === "BUY" ? "KØB" : "SALG";
+}
+
+function toCsv(rows){
+  const esc = (v) => {
+    const s = (v ?? "").toString();
+    if(/[,"\n;]/.test(s)) return `"${s.replaceAll('"','""')}"`;
+    return s;
+  };
+  const headers = ["id","date","portfolio","ticker","side","price","qty","score","trend","marketMood","fearGreed","vix","notes","createdAt"];
+  const lines = [headers.join(",")];
+  for(const r of rows){
+    const line = headers.map(h => esc(r[h]));
+    lines.push(line.join(","));
+  }
+  return lines.join("\n");
+}
+
+function download(name, content, type){
+  const blob = new Blob([content], {type});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 500);
+}
+
+/* =========================
+   Render
+========================= */
+function currentPortfolio(){
+  return $("portfolio").value;
+}
+
+function applyPortfolioFromStorage(){
+  const v = localStorage.getItem(LS_PORTF);
+  if(v && ["A","B","C"].includes(v)) $("portfolio").value = v;
+}
+
+function persistPortfolio(){
+  localStorage.setItem(LS_PORTF, currentPortfolio());
+}
+
+function renderTrades(){
+  const trades = loadTrades();
+  const p = currentPortfolio();
+  const ft = $("filterTicker").value.trim().toLowerCase();
+
+  const filtered = trades
+    .filter(t => t.portfolio === p)
+    .filter(t => !ft || (t.ticker || "").toLowerCase().includes(ft))
+    .sort((a,b) => (a.date || "").localeCompare(b.date || "") || (a.createdAt || "").localeCompare(b.createdAt || ""));
+
+  // KPIs
+  $("kpiCount").textContent = filtered.length;
+  $("kpiBuys").textContent  = filtered.filter(x => x.side === "BUY").length;
+  $("kpiSells").textContent = filtered.filter(x => x.side === "SELL").length;
+  $("kpiLast").textContent  = filtered.length ? (filtered[filtered.length-1].date || "—") : "—";
+
+  const tb = $("tbody");
+  tb.innerHTML = "";
+
+  if(!filtered.length){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="9" class="muted">Ingen trades i denne portefølje endnu.</td>`;
+    tb.appendChild(tr);
+    return;
+  }
+
+  for(const t of filtered){
+    const tr = document.createElement("tr");
+    const snap = [];
+    if(t.score !== null && t.score !== undefined) snap.push(`score ${t.score}`);
+    if(t.trend) snap.push(`trend ${t.trend}`);
+    if(t.marketMood) snap.push(`mood ${t.marketMood}`);
+    const snapText = snap.length ? snap.join(" | ") : "—";
+
+    tr.innerHTML = `
+      <td class="mono">${t.date || "—"}</td>
+      <td><b>${t.portfolio}</b></td>
+      <td class="mono">${t.ticker || "—"}</td>
+      <td><b>${formatSide(t.side)}</b></td>
+      <td class="mono">${t.price ?? "—"}</td>
+      <td class="mono">${t.qty ?? "—"}</td>
+      <td class="small">${snapText}</td>
+      <td class="small">${(t.notes || "").replaceAll("<","&lt;").replaceAll(">","&gt;")}</td>
+      <td style="white-space:nowrap">
+        <button class="danger secondary" data-del="${t.id}">Slet</button>
+      </td>
+    `;
+    tb.appendChild(tr);
+  }
+
+  // bind delete
+  tb.querySelectorAll("button[data-del]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-del");
+      const all = loadTrades();
+      saveTrades(all.filter(x => x.id !== id));
+      renderTrades();
+    });
+  });
+}
+
+/* =========================
+   UI init
+========================= */
+function fillTickerSelect(){
+  // vis sorteret efter name
+  const sorted = [...STOCKS].sort((a,b)=>a.name.localeCompare(b.name));
+  const sel = $("tickerSelect");
+  sel.innerHTML = "";
+  for(const s of sorted){
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = `${s.name} (${s.id})`;
+    sel.appendChild(opt);
+  }
+}
+
+async function updateSnapshotPreview(){
+  const id = $("tickerSelect").value;
+  const d = await loadStockData(id);
+  const trend = calcTrend(d);
+  const score = calcScore(d);
+
+  const f = MARKET?.fearGreed?.value ?? null;
+  const v = MARKET?.vix?.value ?? null;
+  const m = moodFrom(f, v);
+
+  const parts = [];
+  if(score !== null) parts.push(`score ${score}`);
+  if(trend.trend !== "—") parts.push(`trend ${trend.trend}`);
+  if(m.mood !== "—") parts.push(`mood ${m.mood}`);
+  $("snap").textContent = parts.length ? parts.join(" | ") : "—";
+}
+
+async function prefillPriceFromData(){
+  const id = $("tickerSelect").value;
+  const d = await loadStockData(id);
+  const c = safeNum(d?.close);
+  if(c !== null){
+    $("price").value = c;
+    // dato fra data hvis findes
+    const asof = (d?.asOf || d?.asof || "").toString().slice(0,10);
+    if(asof && /^\d{4}-\d{2}-\d{2}$/.test(asof)) $("date").value = asof;
+  }else{
+    alert("Kunne ikke hente close fra data/" + id + ".json");
+  }
+  await updateSnapshotPreview();
+}
+
+async function addTrade(){
+  const portfolio = currentPortfolio();
+  const ticker = $("tickerSelect").value;
+  const side = $("side").value;
+  const date = $("date").value || todayDateValue();
+
+  const price = safeNum($("price").value);
+  const qty = safeNum($("qty").value);
+
+  if(price === null || price <= 0){
+    alert("Udfyld en gyldig kurs.");
+    return;
+  }
+  if(qty === null || qty <= 0){
+    alert("Udfyld et gyldigt antal.");
+    return;
+  }
+
+  const notes = $("notes").value.trim();
+
+  // Snapshot
+  const d = await loadStockData(ticker);
+  const trend = calcTrend(d).trend;
+  const score = calcScore(d);
+
+  const f = MARKET?.fearGreed?.value ?? null;
+  const v = MARKET?.vix?.value ?? null;
+  const mood = moodFrom(f, v).mood;
+
+  const trade = {
+    id: uid(),
+    date,
+    portfolio,
+    ticker,
+    side,
+    price,
+    qty,
+    score,
+    trend: (trend === "—" ? null : trend),
+    marketMood: (mood === "—" ? null : mood),
+    fearGreed: (safeNum(f) === null ? null : safeNum(f)),
+    vix: (safeNum(v) === null ? null : safeNum(v)),
+    notes,
+    createdAt: nowIso(),
+  };
+
+  const all = loadTrades();
+  all.push(trade);
+  saveTrades(all);
+
+  // reset småting
+  $("notes").value = "";
+  $("qty").value = "";
+  // behold price/dato hvis du laver flere handler
+  renderTrades();
+  await updateSnapshotPreview();
+}
+
+function exportCurrent(type){
+  const trades = loadTrades();
+  const p = currentPortfolio();
+  const ft = $("filterTicker").value.trim().toLowerCase();
+  const filtered = trades
+    .filter(t => t.portfolio === p)
+    .filter(t => !ft || (t.ticker || "").toLowerCase().includes(ft));
+
+  if(type === "json"){
+    download(`aktiespil_${p}.json`, JSON.stringify(filtered, null, 2), "application/json");
+  }else{
+    download(`aktiespil_${p}.csv`, toCsv(filtered), "text/csv");
+  }
+}
+
+function wipePortfolio(){
+  const p = currentPortfolio();
+  const ok = confirm(`Slet alle trades i portefølje ${p}?`);
+  if(!ok) return;
+  const all = loadTrades();
+  saveTrades(all.filter(t => t.portfolio !== p));
+  renderTrades();
+}
+
+/* =========================
+   Boot
+========================= */
+(async function init(){
+  $("loadedAt").textContent = nowIso();
+  $("date").value = todayDateValue();
+
+  applyPortfolioFromStorage();
+  fillTickerSelect();
+
+  // Market
+  await loadMarket();
+
+  // events
+  $("portfolio").addEventListener("change", () => {
+    persistPortfolio();
+    renderTrades();
+    updateSnapshotPreview();
+  });
+  $("filterTicker").addEventListener("input", renderTrades);
+  $("tickerSelect").addEventListener("change", updateSnapshotPreview);
+  $("addTrade").addEventListener("click", addTrade);
+  $("prefillFromData").addEventListener("click", prefillPriceFromData);
+
+  $("exportJson").addEventListener("click", () => exportCurrent("json"));
+  $("exportCsv").addEventListener("click", () => exportCurrent("csv"));
+  $("wipePortfolio").addEventListener("click", wipePortfolio);
+
+  renderTrades();
+  await updateSnapshotPreview();
+})();
+</script>
+</body>
+</html>
