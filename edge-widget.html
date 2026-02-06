@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Edge Score Widget (Buy/Sell)</title>
+  <style>
+    body{
+      margin:0;
+      font-family: Arial, sans-serif;
+      background:#0b0b0b;
+      color:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:100vh;
+      padding:24px;
+    }
+
+    .edge-widget{
+      background:#111;
+      border:1px solid #2a2a2a;
+      padding:18px;
+      border-radius:14px;
+      width:320px;
+      box-shadow:0 12px 40px rgba(0,0,0,.4);
+    }
+
+    .edge-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:baseline;
+      gap:12px;
+      margin-bottom:10px;
+    }
+
+    .edge-title{
+      font-size:16px;
+      font-weight:700;
+      margin:0;
+      letter-spacing:.3px;
+    }
+
+    .edge-sub{
+      font-size:12px;
+      opacity:.8;
+    }
+
+    .divider{
+      height:1px;
+      background:#222;
+      margin:12px 0;
+    }
+
+    .score-line{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin:8px 0;
+      font-size:14px;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:86px;
+      padding:6px 10px;
+      border-radius:999px;
+      font-weight:700;
+      border:1px solid #2a2a2a;
+      background:#161616;
+    }
+
+    .pill-buy{ border-color:#1f5; }
+    .pill-sell{ border-color:#f33; }
+
+    .details{
+      font-size:13px;
+      opacity:.92;
+      line-height:1.45;
+    }
+
+    .detail{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      margin:6px 0;
+    }
+
+    .detail span:first-child{ opacity:.75; }
+
+    .bias-box{
+      margin-top:12px;
+      padding:10px 12px;
+      text-align:center;
+      font-weight:800;
+      border-radius:10px;
+      background:#1a1a1a;
+      border:1px solid #2a2a2a;
+      letter-spacing:.4px;
+    }
+
+    .bias-buy{ background: rgba(0,160,80,.18); border-color: rgba(0,255,120,.55); }
+    .bias-sell{ background: rgba(160,0,0,.22); border-color: rgba(255,60,60,.6); }
+    .bias-neutral{ background: rgba(140,140,140,.12); border-color: rgba(160,160,160,.35); }
+
+    .note{
+      margin-top:10px;
+      font-size:12px;
+      opacity:.7;
+    }
+
+    .controls{
+      margin-top:14px;
+      padding-top:12px;
+      border-top:1px solid #222;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      font-size:12px;
+    }
+
+    label{ display:block; opacity:.8; margin-bottom:6px; }
+    input{
+      width:100%;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid #2a2a2a;
+      background:#0f0f0f;
+      color:#fff;
+      outline:none;
+    }
+    input:focus{ border-color:#555; }
+  </style>
+</head>
+<body>
+
+  <div class="edge-widget" id="edgeWidget">
+    <div class="edge-header">
+      <h1 class="edge-title" id="edgeTitle">EDGE SCORE</h1>
+      <div class="edge-sub" id="edgeSub">Buy/Sell zones</div>
+    </div>
+
+    <div class="score-line">
+      <span>BUY SCORE</span>
+      <span class="pill pill-buy" id="buyScore">–/100</span>
+    </div>
+
+    <div class="score-line">
+      <span>SELL SCORE</span>
+      <span class="pill pill-sell" id="sellScore">–/100</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="details">
+      <div class="detail"><span>Trend</span><span id="trendLine">–</span></div>
+      <div class="detail"><span>Sentiment</span><span id="sentimentLine">–</span></div>
+      <div class="detail"><span>RSI</span><span id="rsiLine">–</span></div>
+      <div class="detail"><span>AMT</span><span id="amtLine">–</span></div>
+    </div>
+
+    <div class="bias-box bias-neutral" id="biasBox">Bias: NEUTRAL</div>
+
+    <div class="note" id="noteLine">
+      Note: Dette er en score-model (ikke finansiel rådgivning).
+    </div>
+
+    <!-- Mini controls så du kan teste uden at ændre kode -->
+    <div class="controls">
+      <div>
+        <label for="rsiInput">RSI (0-100)</label>
+        <input id="rsiInput" type="number" min="0" max="100" step="1" value="27">
+      </div>
+      <div>
+        <label for="fngInput">Fear & Greed (0-100)</label>
+        <input id="fngInput" type="number" min="0" max="100" step="1" value="32">
+      </div>
+      <div>
+        <label for="vixInput">VIX (fx 17)</label>
+        <input id="vixInput" type="number" min="0" max="200" step="0.1" value="17">
+      </div>
+      <div>
+        <label for="trendInput">Trend (tekst)</label>
+        <input id="trendInput" type="text" value="Neutral → Bullish">
+      </div>
+    </div>
+  </div>
+
+<script>
+  // --- Scoring logic (version 1) -----------------------------------------
+
+  function clamp(n, min, max){
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function calculateBuyScore(data) {
+    let score = 0;
+
+    // RSI oversold
+    if (data.rsi < 30) score += 20;
+    if (data.rsi < 25) score += 5;
+
+    // Sentiment (fear + vol)
+    if (data.fng < 40) score += 15;
+    if (data.vix > 16) score += 10;
+
+    // AMT flags (manuelle i v1 — senere kan vi automatisere)
+    if (data.atHVN) score += 15;
+    if (data.failedBreakdown) score += 10;
+
+    // Confirmation
+    if (data.confirmation) score += 10;
+
+    return clamp(score, 0, 100);
+  }
+
+  function calculateSellScore(data) {
+    let score = 0;
+
+    // RSI overbought
+    if (data.rsi > 70) score += 20;
+    if (data.rsi > 75) score += 5;
+
+    // Sentiment (greed)
+    if (data.fng > 70) score += 20;
+
+    // AMT / location
+    if (data.atResistance) score += 20;
+
+    // Stretch (fx over VWAP / for langt fra mean)
+    if (data.aboveVWAP) score += 10;
+
+    return clamp(score, 0, 100);
+  }
+
+  function computeBias(buy, sell){
+    // Du kan justere thresholds senere
+    if (buy >= 70 && sell < 40) return "BUY";
+    if (sell >= 70 && buy < 40) return "SELL";
+    return "NEUTRAL";
+  }
+
+  function setBiasUI(bias){
+    const box = document.getElementById("biasBox");
+    box.classList.remove("bias-buy","bias-sell","bias-neutral");
+    if (bias === "BUY") box.classList.add("bias-buy");
+    else if (bias === "SELL") box.classList.add("bias-sell");
+    else box.classList.add("bias-neutral");
+    box.textContent = "Bias: " + bias;
+  }
+
+  function updateWidget(data){
+    const buy = calculateBuyScore(data);
+    const sell = calculateSellScore(data);
+    const bias = computeBias(buy, sell);
+
+    document.getElementById("edgeTitle").textContent = (data.symbol || "EDGE SCORE");
+    document.getElementById("buyScore").textContent = buy + "/100";
+    document.getElementById("sellScore").textContent = sell + "/100";
+
+    document.getElementById("trendLine").textContent = data.trend || "–";
+    document.getElementById("sentimentLine").textContent =
+      `F&G ${data.fng} | VIX ${data.vix}`;
+    document.getElementById("rsiLine").textContent = `${data.rsi}`;
+    document.getElementById("amtLine").textContent = data.amtStatus || "–";
+
+    setBiasUI(bias);
+  }
+
+  // --- Demo data (du kan ændre her) --------------------------------------
+  // I v1 sætter vi AMT-flags manuelt:
+  // atHVN, failedBreakdown, confirmation, atResistance, aboveVWAP
+  const state = {
+    symbol: "NOVO (demo)",
+    rsi: 27,
+    fng: 32,
+    vix: 17,
+    trend: "Neutral → Bullish",
+    amtStatus: "Ved HVN support",
+    atHVN: true,
+    failedBreakdown: true,
+    confirmation: false,
+    atResistance: false,
+    aboveVWAP: false
+  };
+
+  // --- Simple test inputs -------------------------------------------------
+  const rsiInput = document.getElementById("rsiInput");
+  const fngInput = document.getElementById("fngInput");
+  const vixInput = document.getElementById("vixInput");
+  const trendInput = document.getElementById("trendInput");
+
+  function syncFromInputs(){
+    state.rsi = Number(rsiInput.value || 0);
+    state.fng = Number(fngInput.value || 0);
+    state.vix = Number(vixInput.value || 0);
+    state.trend = trendInput.value || "–";
+
+    // Simple heuristik (kun for demo):
+    // Hvis RSI er meget høj, så antag "aboveVWAP" + "atResistance"
+    state.aboveVWAP = state.rsi > 70;
+    state.atResistance = state.rsi > 70;
+
+    // Hvis RSI er meget lav, så antag "atHVN" og mulig "failedBreakdown"
+    state.atHVN = state.rsi < 30;
+    state.failedBreakdown = state.rsi < 27;
+
+    updateWidget(state);
+  }
+
+  [rsiInput, fngInput, vixInput, trendInput].forEach(el => {
+    el.addEventListener("input", syncFromInputs);
+  });
+
+  // Initial render
+  updateWidget(state);
+</script>
+</body>
+</html>
