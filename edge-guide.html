@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Edge-guide (MVP) · Aktie-MVP</title>
+  <style>
+    :root{
+      --bg:#0b0b0c; --card:#121214; --text:#f3f4f6; --muted:#a1a1aa;
+      --line:#242427; --accent:#ffffff;
+      --good:#22c55e; --bad:#ef4444; --warn:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text);}
+    a{color:var(--text); text-decoration:none}
+    .wrap{max-width:1100px; margin:0 auto; padding:22px 18px 60px;}
+    .topbar{
+      position:sticky; top:0; backdrop-filter: blur(10px);
+      background:rgba(11,11,12,.72); border-bottom:1px solid var(--line); z-index:10;
+    }
+    .nav{display:flex; gap:14px; align-items:center; justify-content:space-between; padding:14px 18px; max-width:1100px; margin:0 auto;}
+    .brand{font-weight:800; letter-spacing:.2px}
+    .links{display:flex; gap:14px; flex-wrap:wrap}
+    .pill{padding:7px 10px; border:1px solid var(--line); border-radius:999px; color:var(--muted)}
+    .pill:hover{border-color:#3a3a40; color:var(--text)}
+    h1{font-size:34px; margin:18px 0 6px}
+    p{color:var(--muted); line-height:1.55}
+    .grid{display:grid; grid-template-columns: 1.2fr .8fr; gap:14px; margin-top:16px}
+    @media (max-width: 900px){ .grid{grid-template-columns:1fr} }
+    .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px}
+    .card h2{margin:0 0 8px; font-size:18px}
+    .card h3{margin:14px 0 8px; font-size:15px}
+    .kpi{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px}
+    .tag{border:1px solid var(--line); border-radius:999px; padding:6px 10px; color:var(--muted)}
+    .tag b{color:var(--text)}
+    .ok{color:var(--good)} .no{color:var(--bad)} .wa{color:var(--warn)}
+    .list{margin:10px 0 0; padding-left:18px; color:var(--muted)}
+    .list li{margin:8px 0}
+    .hr{height:1px; background:var(--line); margin:14px 0}
+    .box{border:1px dashed #3a3a40; border-radius:14px; padding:12px; background:rgba(255,255,255,.02)}
+    code{background:rgba(255,255,255,.06); padding:2px 6px; border-radius:8px; color:#e5e7eb}
+    .small{font-size:13px; color:var(--muted)}
+    .ex{white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size:13px; background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:14px; padding:12px; overflow:auto;}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="nav">
+      <div class="brand">Aktie-MVP</div>
+      <div class="links">
+        <a class="pill" href="./index.html">Forside</a>
+        <a class="pill" href="./market.html">Marked</a>
+        <a class="pill" href="./aktiespil.html">Aktiespil</a>
+        <a class="pill" href="./laering.html">Læring</a>
+        <a class="pill" href="./edge-guide.html"><b>Edge-guide</b></a>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h1>Edge-guide (MVP)</h1>
+    <p>
+      Formålet er at gøre din tilgang testbar: mean reversion + reference points + risiko-styring.
+      Ikke daytrading. Du logger trades i aktiespillet, og bruger dette som “manual” for, hvornår du handler (og hvornår du lader være).
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>1) Pris bestemmes af ordrebogen – ikke “gennemsnitlig mening”</h2>
+        <p>
+          En aktie flytter sig, når <b>aggressive ordre</b> (market/marketable limit) spiser likviditet på den anden side.
+          “Mening” påvirker, hvor folk placerer deres limit-ordrer – men <b>printet pris</b> kommer fra matching i orderbogen.
+        </p>
+
+        <div class="box">
+          <h3>Eksempel (simpelt, men korrekt):</h3>
+          <div class="ex">
+Orderbog (forenklet)
+KØB (bid)                SÆLG (ask)
+300.00: 2.000 stk         300.10: 200 stk
+299.90: 5.000 stk         300.20: 400 stk
+299.50: 10.000 stk        300.50: 800 stk
+295.00: 25.000 stk        301.00: 1.500 stk
+
+Hvis der kommer et market-salg på 8.000 stk:
+- Det "rammer" 300.00 (2.000) + 299.90 (5.000) + resten ned på 299.50 (1.000)
+=> sidste handel ~299.50, pris falder uden at nogen “besluttede” 0.5%
+          </div>
+          <p class="small">
+            Pointen: <b>1%</b> kræver ikke “én stor person” — det kræver, at der i øjeblikket er for lidt købs-likviditet tæt på prisen,
+            relativt til det aggressive salg/køb der rammer markedet.
+          </p>
+        </div>
+
+        <div class="hr"></div>
+
+        <h3>Hvorfor kan en aktie “åbne” -10% til -15% på en nyhed?</h3>
+        <ul class="list">
+          <li><b>Opening auction</b>: Mange markeder har en åbningsauktion. Der samles ordre, og der findes én pris der matcher mest volumen. Stor ubalance = stor gap.</li>
+          <li><b>Ingen “huller” udfyldes automatisk</b>: Hvis der næsten ingen bids ligger ved 300, men mange bids ligger ved 270–280, så “finder” auktionen en pris dernede.</li>
+          <li><b>Institutionelle flows</b>: På store nyheder kommer rebalancering, stop-loss, hedging, ETF-flow, risk-parity/vol-targeting osv. Det er ikke primært private der flytter 15% på open.</li>
+        </ul>
+
+        <div class="box">
+          <h3>Din konkrete tanke (Novo):</h3>
+          <p class="small">
+            Ja: hvis der <b>ikke</b> er nok købsinteresse tæt på gårsdagens niveau, og de fleste købsordrer ligger lavere,
+            så kan prisen åbne langt nede. Det betyder ikke “ingen vil købe Novo” – det betyder “de vil købe, men til en lavere pris efter nyheden”.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Quick regler du kan teste i Aktiespil</h2>
+        <p>Du ville have 3 ting: <b>køb-setup</b>, <b>salg-setup</b>, og en <b>visuel / checkliste-form</b>. Her er den.</p>
+
+        <div class="kpi">
+          <div class="tag"><b>Stil:</b> Mean reversion</div>
+          <div class="tag"><b>Tid:</b> dage/uger</div>
+          <div class="tag"><b>Undgå:</b> regnskab/nyheder</div>
+        </div>
+
+        <div class="hr"></div>
+
+        <h3>2) Køb-setup (mean reversion)</h3>
+        <ul class="list">
+          <li><span class="ok">✅</span> Pris er ved/under <b>vigtig reference</b>: prior low, value area low, større support-zone.</li>
+          <li><span class="ok">✅</span> <b>RSI lav</b> på den timeframe du handler (fx daily under ~30 eller din egen historiske “reaktions-zone”).</li>
+          <li><span class="ok">✅</span> <b>Struktur</b>: tegn på “selling exhaustion” / lavere down-momentum (fx mindre range, wick, eller at pris ikke kan fortsætte lavere).</li>
+          <li><span class="wa">⚠️</span> Market context: VIX/uro høj = forvent større swings (position size ned).</li>
+          <li><span class="no">❌</span> <b>Ingen køb tæt på regnskab</b> (medmindre din edge er “earnings play” – hvilket den ikke er her).</li>
+        </ul>
+
+        <div class="hr"></div>
+
+        <h3>3) Salg / Take profit / risiko (når greed + RSI er høj)</h3>
+        <ul class="list">
+          <li><span class="ok">✅</span> Tag profit når pris nærmer sig <b>næste reference</b>: prior high, value area high, større modstand.</li>
+          <li><span class="ok">✅</span> Hvis <b>RSI &gt; 70</b> og markedet føles “euforisk” (greed) → stram stop / del-sælg.</li>
+          <li><span class="ok">✅</span> Brug “tranche”-exit: sælg fx 1/3 ved første target, 1/3 ved næste, lad resten køre med trailing/struktur.</li>
+          <li><span class="no">❌</span> Hold ikke fast bare fordi “du har ret”. Hvis setup’et objektivt er brudt, så ud.</li>
+        </ul>
+
+        <div class="box">
+          <h3>Minimal risikoregel (så det kan testes fair):</h3>
+          <p class="small">
+            Definér før køb: <b>Invalidation</b> (hvor er ideen forkert?) + <b>Target</b> (hvor er ideen opfyldt?) + <b>Size</b> (så et stop ikke ødelægger dig).
+          </p>
+        </div>
+
+        <div class="hr"></div>
+
+        <h3>Ekstra: hvorfor RSI ikke “fanger” ISS-scenariet</h3>
+        <p class="small">
+          Trend-aktier kan “walk the RSI” og aldrig komme under 30. Det er ikke et bevis på at din plan er dårlig.
+          Det betyder bare: din edge er mean reversion, så du accepterer at misse nogle trends – og leder efter de tusind andre der reverterer.
+        </p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>Sådan tester du det i aktiespillet (3 porteføljer)</h2>
+      <ul class="list">
+        <li><b>A:</b> “følelser / mainstream” (baseline) – så du kan sammenligne.</li>
+        <li><b>B:</b> Regelbaseret (denne guide) – kun setups der opfylder checklisten.</li>
+        <li><b>C:</b> Variant (fx samme som B, men strengere: ingen køb uden både RSI-zone + reference + tegn på exhaustion).</li>
+      </ul>
+      <p class="small">
+        Når du logger en trade, skriv altid: “reference, RSI, hvorfor nu, invalidation, target”. Ellers kan du ikke lære noget af testen.
+      </p>
+    </div>
+
+    <p class="small" style="margin-top:14px">
+      *Ikke rådgivning. Dette er en testbar metodebeskrivelse.*
+    </p>
+  </div>
+</body>
+</html>
