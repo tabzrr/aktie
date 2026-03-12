@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-03-11T19:10:32+00:00",
+  "updatedAt": "2026-03-12T19:11:38+00:00",
   "fearGreed": {
-    "value": 26,
-    "label": "Frygt",
-    "asof": "2026-03-11",
+    "value": 23,
+    "label": "Ekstrem frygt",
+    "asof": "2026-03-12",
     "source": "CNN (graphdata)"
   },
   "vix": {
@@ -15,6 +15,8 @@
     "Fear&Greed JSON failed: RuntimeError: Could not locate Fear & Greed value in CNN JSON payload",
     "Fear&Greed fallback failed: RuntimeError: Fallback could not extract Fear & Greed from CNN page",
     "Fear&Greed JSON failed: RuntimeError: Could not locate Fear & Greed value in CNN JSON payload",
-    "Fear&Greed fallback failed: RuntimeError: Fallback could not extract Fear & Greed from CNN page"
+    "Fear&Greed fallback failed: RuntimeError: Fallback could not extract Fear & Greed from CNN page",
+    "VIX failed: ReadTimeout: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=25)",
+    "VIX: fetch fejlede, beholdt sidste kendte værdi."
   ]
 }
