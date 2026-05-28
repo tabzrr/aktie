@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-05-27T20:28:32+00:00",
+  "updatedAt": "2026-05-28T20:36:42+00:00",
   "fearGreed": {
-    "value": 61,
+    "value": 60,
     "label": "Grådighed",
-    "asof": "2026-05-27",
+    "asof": "2026-05-28",
     "source": "CNN (graphdata)"
   },
   "vix": {
