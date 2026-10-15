@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-10-14T21:40:01+00:00",
+  "updatedAt": "2026-10-15T21:21:26+00:00",
   "fearGreed": {
     "value": 32,
     "label": "Frygt",
-    "asof": "2026-10-14",
+    "asof": "2026-10-15",
     "source": "CNN (graphdata)"
   },
   "vix": {
