@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-10-16T21:06:25+00:00",
+  "updatedAt": "2026-10-19T22:20:11+00:00",
   "fearGreed": {
-    "value": 18,
+    "value": 23,
     "label": "Ekstrem frygt",
-    "asof": "2026-10-16",
+    "asof": "2026-10-19",
     "source": "CNN (graphdata)"
   },
   "vix": {
